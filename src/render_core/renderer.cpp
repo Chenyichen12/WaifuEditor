@@ -11,7 +11,7 @@
 
 namespace rdc {
 ModelRenderer::ModelRenderer() {
-  auto driver = VulkanDriver::GetSingleton();
+  auto *driver = VulkanDriver::GetSingleton();
   assert(driver != nullptr && "driver is not init");
 
   {
@@ -68,12 +68,12 @@ ModelRenderer::ModelRenderer() {
         sizeof(shader_gen::canvas_sd::fragment_spv);
     frag_shader_create_info.pCode = shader_gen::canvas_sd::fragment_spv;
 
-    VkShaderEXT shaderEXTs[2];
+    VkShaderEXT shader_exts[2];
 
     AssertVkResult(vkCreateShadersEXT(
-        driver->GetDevice(), 2, shader_create_infos, nullptr, shaderEXTs));
-    _vertex_shader.shader = shaderEXTs[0];
-    _fragment_shader.shader = shaderEXTs[1];
+        driver->GetDevice(), 2, shader_create_infos, nullptr, shader_exts));
+    _vertex_shader.shader = shader_exts[0];
+    _fragment_shader.shader = shader_exts[1];
   }
   {
     VkCommandBufferAllocateInfo command_buffer_allocate_info = {
@@ -90,10 +90,10 @@ ModelRenderer::ModelRenderer() {
 }
 
 void ModelRenderer::RecordCommandBuffer() {
-  auto driver = VulkanDriver::GetSingleton();
+  auto *driver = VulkanDriver::GetSingleton();
   uint32_t index = driver->GetCurrentSwapchainImageIndex();
   {
-    auto &images = driver->GetSwapchainImages();
+    const auto &images = driver->GetSwapchainImages();
     driver->HTransitionImageLayout(
         _command_buffer, images[index], 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -103,7 +103,7 @@ void ModelRenderer::RecordCommandBuffer() {
 
   {
     VkRenderingAttachmentInfo att_info = {};
-    auto &views = driver->GetSwapchainImageViews();
+    const auto &views = driver->GetSwapchainImageViews();
     att_info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     att_info.imageView = views[index];
     att_info.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -145,7 +145,7 @@ void ModelRenderer::RecordCommandBuffer() {
 }
 void ModelRenderer::AddLayer(Layer2dResource *layer) {}
 ModelRenderer::~ModelRenderer() {
-  auto driver = VulkanDriver::GetSingleton();
+  auto *driver = VulkanDriver::GetSingleton();
   _vertex_shader.Destroy(driver->GetDevice());
   _fragment_shader.Destroy(driver->GetDevice());
 
@@ -156,7 +156,7 @@ ModelRenderer::~ModelRenderer() {
 void ModelRenderer::Render() {}
 
 Layer2dResource::~Layer2dResource() {
-  auto driver = VulkanDriver::GetSingleton();
+  auto *driver = VulkanDriver::GetSingleton();
   vmaDestroyImage(driver->GetVmaAllocator(), _image, _allocation);
   vkDestroyImageView(driver->GetDevice(), _image_view, nullptr);
 }
@@ -165,15 +165,16 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
     const ImageConfig &config) {
   assert(VulkanDriver::GetSingleton() != nullptr &&
          "VulkanDriver is not initialized");
-  auto driver = VulkanDriver::GetSingleton();
+  auto *driver = VulkanDriver::GetSingleton();
 
   auto result = std::unique_ptr<Layer2dResource>(new Layer2dResource());
 
   // upload data
-  auto cpu_image = config.pimage;
+  auto *cpu_image = config.pimage;
 
   VkDeviceSize size =
-      cpu_image->width * cpu_image->height * cpu_image->channels;
+      static_cast<int64_t>(cpu_image->width * cpu_image->height * cpu_image->channels);
+
   VkBuffer staging_buffer;
   VmaAllocation staging_allocation;
   driver->HCreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,

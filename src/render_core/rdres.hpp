@@ -28,7 +28,7 @@ class ImageRenderResource : public IRenderResource {
         _allocation(allocation),
         _image_view(image_view),
         _driver(driver) {}
-  ~ImageRenderResource() {
+  ~ImageRenderResource() override {
     vkDestroyImageView(_driver->GetDevice(), _image_view, nullptr);
     vmaDestroyImage(_driver->GetVmaAllocator(), _image, _allocation);
   }
@@ -63,11 +63,11 @@ class RenderResourceManager {
   }
 
   template <typename T>
-  T *GetResource(uint32_t id) {
-    return static_cast<T *>(_resources[id].get());
+  T *GetResource(uint32_t rid) {
+    return static_cast<T *>(_resources[rid].get());
   }
 
-  void ReleaseResource(uint32_t id) { _resources.erase(id); }
+  void ReleaseResource(uint32_t rid) { _resources.erase(rid); }
 };
 }  // namespace rdc
 #endif  // RENDER_CORE_RDRES_HPP_

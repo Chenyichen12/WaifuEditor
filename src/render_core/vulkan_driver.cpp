@@ -16,14 +16,14 @@ void AddContainer(std::vector<const char *> &container, const char *item) {
   container.push_back(item);
 }
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL
+VKAPI_ATTR VkBool32 VKAPI_CALL
 DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-              VkDebugUtilsMessageTypeFlagsEXT messageType,
+              VkDebugUtilsMessageTypeFlagsEXT  /*messageType*/,
               const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-              void *pUserData) {
+              void * /*pUserData*/) {
   if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT ||
       messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-    std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+    std::cerr << "validation layer: " << pCallbackData->pMessage << '\n';
   }
   return VK_FALSE;
 };
@@ -145,10 +145,10 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
         graphics_queue_family_index = i;
         // break;
       }
-      VkBool32 presentSupport = false;
+      VkBool32 present_support = VK_FALSE;
       vkGetPhysicalDeviceSurfaceSupportKHR(selected_device, i, _surface,
-                                           &presentSupport);
-      if (presentSupport) {
+                                           &present_support);
+      if (present_support) {
         present_queue_family_index = i;
       }
       if (graphics_queue_family_index != UINT32_MAX &&
@@ -199,15 +199,15 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
                  VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME);
     AddContainer(device_extensions, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
 
-    VkPhysicalDeviceShaderObjectFeaturesEXT shaderObjectFeatures = {};
-    shaderObjectFeatures.sType =
+    VkPhysicalDeviceShaderObjectFeaturesEXT shader_object_features = {};
+    shader_object_features.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT;
-    shaderObjectFeatures.shaderObject = VK_TRUE;
+    shader_object_features.shaderObject = VK_TRUE;
 
     VkDeviceCreateInfo device_info = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         // .pNext = &dynamic_rendering_features,
-        .pNext = &shaderObjectFeatures,
+        .pNext = &shader_object_features,
         .queueCreateInfoCount = static_cast<uint32_t>(queue_infos.size()),
         .pQueueCreateInfos = queue_infos.data(),
         .enabledExtensionCount =
@@ -232,11 +232,11 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
               << "\n";
 
     // swapchain details
-    swapchain_packet.QuerySwapchainSupport(selected_device, _surface);
+    _swapchain_packet.QuerySwapchainSupport(selected_device, _surface);
     {
-      VmaVulkanFunctions vulkanFunctions = {};
-      vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
-      vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+      VmaVulkanFunctions vulkan_functions = {};
+      vulkan_functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+      vulkan_functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
       // vma
       VmaAllocatorCreateInfo vma_allocator_info = {
           .physicalDevice = selected_device,
@@ -244,7 +244,7 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
           .instance = _instance,
           .vulkanApiVersion = VK_API_VERSION_1_1,
       };
-      vma_allocator_info.pVulkanFunctions = &vulkanFunctions;
+      vma_allocator_info.pVulkanFunctions = &vulkan_functions;
 
       AssertVkResult(vmaCreateAllocator(&vma_allocator_info, &_vma_allocator),
                      "Failed to create VMA allocator");
@@ -268,12 +268,12 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
   }
 }
 void VulkanDriver::CreateSwapchain(const VkExtent2D &extent) {
-  auto surface_format = swapchain_packet.ChooseSurfaceFormat();
-  auto present_mode = swapchain_packet.ChoosePresentMode();
+  auto surface_format = _swapchain_packet.ChooseSurfaceFormat();
+  auto present_mode = _swapchain_packet.ChoosePresentMode();
   auto swapchain_extent =
-      swapchain_packet.ChooseExtent(extent.width, extent.height);
-  auto image_count = swapchain_packet.capabilities.minImageCount + 1;
-  auto old_swapchain = swapchain_packet.swapchain;
+      _swapchain_packet.ChooseExtent(extent.width, extent.height);
+  auto image_count = _swapchain_packet.capabilities.minImageCount + 1;
+  auto *old_swapchain = _swapchain_packet.swapchain;
 
   VkSwapchainCreateInfoKHR swapchain_info = {
       .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -286,7 +286,7 @@ void VulkanDriver::CreateSwapchain(const VkExtent2D &extent) {
       .imageExtent = swapchain_extent,
       .imageArrayLayers = 1,
       .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-      .preTransform = swapchain_packet.capabilities.currentTransform,
+      .preTransform = _swapchain_packet.capabilities.currentTransform,
       .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
       .presentMode = present_mode,
       .clipped = VK_TRUE,
@@ -305,34 +305,34 @@ void VulkanDriver::CreateSwapchain(const VkExtent2D &extent) {
     swapchain_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
   }
   AssertVkResult(vkCreateSwapchainKHR(_device, &swapchain_info, nullptr,
-                                      &swapchain_packet.swapchain),
+                                      &_swapchain_packet.swapchain),
                  "Failed to create swapchain");
   // destroy old swapchain
   vkDestroySwapchainKHR(_device, old_swapchain, nullptr);
   // destroy old image views
-  for (auto &image_view : swapchain_packet.image_views) {
+  for (auto &image_view : _swapchain_packet.image_views) {
     vkDestroyImageView(_device, image_view, nullptr);
   }
 
   // get infomations
-  swapchain_packet.extent = swapchain_extent;
-  swapchain_packet.image_format = surface_format.format;
+  _swapchain_packet.extent = swapchain_extent;
+  _swapchain_packet.image_format = surface_format.format;
 
-  vkGetSwapchainImagesKHR(_device, swapchain_packet.swapchain, &image_count,
+  vkGetSwapchainImagesKHR(_device, _swapchain_packet.swapchain, &image_count,
                           nullptr);
-  swapchain_packet.images.resize(image_count);
-  swapchain_packet.image_views.resize(image_count);
+  _swapchain_packet.images.resize(image_count);
+  _swapchain_packet.image_views.resize(image_count);
   AssertVkResult(
-      vkGetSwapchainImagesKHR(_device, swapchain_packet.swapchain, &image_count,
-                              swapchain_packet.images.data()),
+      vkGetSwapchainImagesKHR(_device, _swapchain_packet.swapchain, &image_count,
+                              _swapchain_packet.images.data()),
       "Failed to get swapchain images");
 
-  for (size_t i = 0; i < swapchain_packet.images.size(); ++i) {
+  for (size_t i = 0; i < _swapchain_packet.images.size(); ++i) {
     VkImageViewCreateInfo image_view_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
-        .image = swapchain_packet.images[i],
+        .image = _swapchain_packet.images[i],
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
         .format = surface_format.format,
         .components =
@@ -352,7 +352,7 @@ void VulkanDriver::CreateSwapchain(const VkExtent2D &extent) {
             },
     };
     AssertVkResult(vkCreateImageView(_device, &image_view_info, nullptr,
-                                     &swapchain_packet.image_views[i]),
+                                     &_swapchain_packet.image_views[i]),
                    "Failed to create image view for swapchain image");
   }
 }
@@ -419,10 +419,10 @@ void VulkanDriver::HEndOneTimeCommandBuffer(
 }
 
 void VulkanDriver::HTransitionImageLayout(
-    const VkCommandBuffer &cmd, const VkImage &image, const VkAccessFlags src,
-    const VkAccessFlags dst, const VkPipelineStageFlags src_stage,
-    const VkPipelineStageFlags dst_stage, const VkImageLayout old_layout,
-    const VkImageLayout new_layout,
+    const VkCommandBuffer &cmd, const VkImage &image, 
+    const VkAccessFlags src, const VkAccessFlags dst,
+    const VkPipelineStageFlags src_stage, const VkPipelineStageFlags dst_stage,
+    const VkImageLayout old_layout, const VkImageLayout new_layout,
     const VkImageSubresourceRange &range) const {
   VkImageMemoryBarrier barrier = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -469,7 +469,7 @@ VulkanDriver::~VulkanDriver() {
   }
   vmaDestroyAllocator(_vma_allocator);
   vkDestroyCommandPool(_device, _command_pool, nullptr);
-  swapchain_packet.Destroy(_device);
+  _swapchain_packet.Destroy(_device);
   vkDestroySurfaceKHR(_instance, _surface, nullptr);
   vkDestroyDevice(_device, nullptr);
   vkDestroyInstance(_instance, nullptr);
@@ -529,5 +529,5 @@ void VulkanDriver::SwapchainPacket::Destroy(VkDevice device) {
   }
   vkDestroySwapchainKHR(device, swapchain, nullptr);
 }
-
+VulkanDriver* VulkanDriver::singleton_driver = nullptr;
 }  // namespace rdc

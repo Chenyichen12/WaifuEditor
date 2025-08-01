@@ -18,7 +18,7 @@ struct ModelVertex {
 
 class Layer2dResource : public IRenderResource, public NoCopyable {
   friend class ModelRenderer;
-  bool dirty = false;
+  bool _dirty = false;
 
   VkImage _image = VK_NULL_HANDLE;
   VmaAllocation _allocation = VK_NULL_HANDLE;
@@ -29,12 +29,12 @@ class Layer2dResource : public IRenderResource, public NoCopyable {
   std::vector<uint32_t> _indices;
 
  public:
-  inline void MarkDirty() { dirty = true; }
+  void MarkDirty() { _dirty = true; }
   struct ImageConfig {
     CPUImage *pimage = nullptr;
     VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-    std::span<ModelVertex> vertices = {};
-    std::span<uint32_t> indices = {};
+    std::span<ModelVertex> vertices;
+    std::span<uint32_t> indices;
   };
   static std::unique_ptr<Layer2dResource> CreateFromImage(
       const ImageConfig &config);

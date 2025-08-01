@@ -6,7 +6,6 @@
 
 #include <cstdint>
 #include <functional>
-#include <memory>
 #include <vector>
 
 #include "vulkan/vulkan_core.h"
@@ -58,62 +57,59 @@ class VulkanDriver {
     std::vector<VkPresentModeKHR> present_modes;
     VkSurfaceCapabilitiesKHR capabilities;
 
-  } swapchain_packet;
+  } _swapchain_packet;
   VkCommandPool _command_pool = VK_NULL_HANDLE;
 
   void CreateSwapchain(const VkExtent2D &extent);
 
  public:
-  VulkanDriver(const VulkanDriverConfig &config);
+  explicit VulkanDriver(const VulkanDriverConfig &config);
 
   // getter for vulkan driver
 
   /// swapchains
-  inline const VkSwapchainKHR &GetSwapchain() const {
-    return swapchain_packet.swapchain;
+  const VkSwapchainKHR &GetSwapchain() const {
+    return _swapchain_packet.swapchain;
   }
-  inline const VkFormat &GetSwapchainFormat() const {
-    return swapchain_packet.image_format;
+  const VkFormat &GetSwapchainFormat() const {
+    return _swapchain_packet.image_format;
   }
-  inline const std::vector<VkImageView> &GetSwapchainImageViews() const {
-    return swapchain_packet.image_views;
+  const std::vector<VkImageView> &GetSwapchainImageViews() const {
+    return _swapchain_packet.image_views;
   }
-  inline const std::vector<VkImage> &GetSwapchainImages() const {
-    return swapchain_packet.images;
+  const std::vector<VkImage> &GetSwapchainImages() const {
+    return _swapchain_packet.images;
   }
-  inline const VkExtent2D& GetSwapchainExtent() const {
-    return swapchain_packet.extent;
+  const VkExtent2D &GetSwapchainExtent() const {
+    return _swapchain_packet.extent;
   }
 
-
-  inline uint32_t GetCurrentSwapchainImageIndex() const {
-    return swapchain_packet.current_image_index;
+  uint32_t GetCurrentSwapchainImageIndex() const {
+    return _swapchain_packet.current_image_index;
   }
-  inline int AcquireNextSwapchainImage(const VkCommandBuffer &buf,
-                                       const VkSemaphore &semaphore,
-                                       const VkFence &fence) {
-    vkAcquireNextImageKHR(_device, swapchain_packet.swapchain, UINT64_MAX,
+  int AcquireNextSwapchainImage(const VkCommandBuffer &,
+                                const VkSemaphore &semaphore,
+                                const VkFence &fence) {
+    vkAcquireNextImageKHR(_device, _swapchain_packet.swapchain, UINT64_MAX,
                           semaphore, fence,
-                          &swapchain_packet.current_image_index);
-    return swapchain_packet.current_image_index;
+                          &_swapchain_packet.current_image_index);
+    return static_cast<int>(_swapchain_packet.current_image_index);
   }
 
-  inline const VkQueue &GetGraphicsQueue() const {
+  const VkQueue &GetGraphicsQueue() const {
     return _queue_packet.graphics_queue;
   }
-  inline const VkQueue &GetPresentQueue() const {
-    return _queue_packet.present_queue;
-  }
-  inline const uint32_t &GetGraphicsQueueFamilyIndex() const {
+  const VkQueue &GetPresentQueue() const { return _queue_packet.present_queue; }
+  const uint32_t &GetGraphicsQueueFamilyIndex() const {
     return _queue_packet.graphics_queue_family_index;
   }
-  inline const uint32_t &GetPresentQueueFamilyIndex() const {
+  const uint32_t &GetPresentQueueFamilyIndex() const {
     return _queue_packet.present_queue_family_index;
   }
 
-  inline const VkDevice &GetDevice() const { return _device; }
-  inline const VkCommandPool &GetCommandPool() const { return _command_pool; }
-  inline const VmaAllocator &GetVmaAllocator() const { return _vma_allocator; }
+  const VkDevice &GetDevice() const { return _device; }
+  const VkCommandPool &GetCommandPool() const { return _command_pool; }
+  const VmaAllocator &GetVmaAllocator() const { return _vma_allocator; }
 
   // helpers
   VkSampler HCreateSimpleSampler() const;
@@ -121,7 +117,7 @@ class VulkanDriver {
   void HEndOneTimeCommandBuffer(const VkCommandBuffer &command_buffer,
                                 const VkQueue &submit_queue) const;
 
-  enum class TransitionState {
+  enum class TransitionState : uint8_t {
     kInit2Transfer,
     kTransfer2Read,
   };
@@ -136,12 +132,12 @@ class VulkanDriver {
                               });
 
   void HTransitionImageLayout(const VkCommandBuffer &cmd, const VkImage &image,
-                              const VkAccessFlags src_access,
-                              const VkAccessFlags dst_access,
-                              const VkPipelineStageFlags src_stage,
-                              const VkPipelineStageFlags dst_stage,
-                              const VkImageLayout old_layout,
-                              const VkImageLayout new_layout,
+                              VkAccessFlags src_access,
+                              VkAccessFlags dst_access,
+                              VkPipelineStageFlags src_stage,
+                              VkPipelineStageFlags dst_stage,
+                              VkImageLayout old_layout,
+                              VkImageLayout new_layout,
                               const VkImageSubresourceRange &range = {
                                   .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                                   .baseMipLevel = 0,
@@ -157,7 +153,7 @@ class VulkanDriver {
 
   // global vulkan
  private:
-  inline static VulkanDriver *singleton_driver = nullptr;
+  static VulkanDriver *singleton_driver;
 
  public:
   static void InitSingleton(const VulkanDriverConfig &config) {
