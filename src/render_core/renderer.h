@@ -1,14 +1,15 @@
 #ifndef RENDER_CORE_RENDERER_H_
 #define RENDER_CORE_RENDERER_H_
+#include <cstdint>
 #include <glm/glm.hpp>
 #include <memory>
 #include <span>
 #include <vector>
 
 #include "editor/types.hpp"
+#include "rdres.hpp"
 #include "vulkan/vulkan_core.h"
 #include "vulkan_driver.h"
-#include "rdres.hpp"
 namespace rdc {
 
 struct ModelVertex {
@@ -27,6 +28,12 @@ class Layer2dResource : public IRenderResource, public NoCopyable {
 
   std::vector<ModelVertex> _vertices;
   std::vector<uint32_t> _indices;
+  struct Buffer {
+    VkBuffer _buffer = VK_NULL_HANDLE;
+    VmaAllocation _allocation = VK_NULL_HANDLE;
+  };
+  Buffer _vertex_buffer;
+  Buffer _index_buffer;
 
  public:
   void MarkDirty() { _dirty = true; }
@@ -46,7 +53,8 @@ class ModelRenderer {
   VkSampler _layer_sampler = VK_NULL_HANDLE;
   std::vector<Layer2dResource *> _render_layers;
   VkDescriptorSetLayout _descriptor_set_layout = VK_NULL_HANDLE;
-
+  VkPipelineLayout _pipeline_layout = VK_NULL_HANDLE;
+  VkSampler _sampler = VK_NULL_HANDLE;
 
   struct Shader {
     VkShaderStageFlagBits stage_flag = VK_SHADER_STAGE_VERTEX_BIT;
@@ -61,6 +69,8 @@ class ModelRenderer {
 
   VkCommandBuffer _command_buffer = VK_NULL_HANDLE;
   void RecordCommandBuffer();
+  // cmd
+  void BindLayerDescriptorSet(uint32_t index) const;
 
  public:
   ModelRenderer();

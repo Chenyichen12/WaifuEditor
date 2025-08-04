@@ -10,156 +10,6 @@
 #include "vulkan_driver.h"
 
 namespace rdc {
-ModelRenderer::ModelRenderer() {
-  auto *driver = VulkanDriver::GetSingleton();
-  assert(driver != nullptr && "driver is not init");
-
-  {
-    std::vector<VkDescriptorSetLayoutBinding> bindings;
-    bindings.push_back({
-        .binding = shader_gen::canvas_sd::ubo.binding,
-        .descriptorType = shader_gen::canvas_sd::ubo.desc_type,
-        .descriptorCount = 1,
-        .stageFlags = shader_gen::canvas_sd::ubo.stages,
-    });
-    bindings.push_back({
-        .binding = shader_gen::canvas_sd::main_tex.binding,
-        .descriptorType = shader_gen::canvas_sd::main_tex.desc_type,
-        .descriptorCount = 1,
-        .stageFlags = shader_gen::canvas_sd::main_tex.stages,
-    });
-
-    VkDescriptorSetLayoutCreateInfo set0_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .bindingCount = static_cast<uint32_t>(bindings.size()),
-        .pBindings = bindings.data(),
-    };
-    vkCreateDescriptorSetLayout(driver->GetDevice(), &set0_info, nullptr,
-                                &_descriptor_set_layout);
-  }
-  {
-    // shader objects
-    _vertex_shader.stage_flag = VK_SHADER_STAGE_VERTEX_BIT;
-    _fragment_shader.stage_flag = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    VkShaderCreateInfoEXT shader_create_infos[2];
-    VkShaderCreateInfoEXT &vert_shader_create_info = shader_create_infos[0];
-    vert_shader_create_info = {};
-    vert_shader_create_info.sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT;
-    vert_shader_create_info.pNext = nullptr;
-    vert_shader_create_info.pName = "main";
-    vert_shader_create_info.flags = VK_SHADER_CREATE_LINK_STAGE_BIT_EXT;
-    vert_shader_create_info.stage = _vertex_shader.stage_flag;
-    vert_shader_create_info.nextStage = _fragment_shader.stage_flag;
-    vert_shader_create_info.codeType = VK_SHADER_CODE_TYPE_SPIRV_EXT;
-    vert_shader_create_info.codeSize =
-        sizeof(shader_gen::canvas_sd::vertex_spv);
-    vert_shader_create_info.pCode = shader_gen::canvas_sd::vertex_spv;
-    vert_shader_create_info.setLayoutCount = 1;
-    vert_shader_create_info.pSetLayouts = &_descriptor_set_layout;
-
-    VkShaderCreateInfoEXT &frag_shader_create_info = shader_create_infos[1];
-    frag_shader_create_info = vert_shader_create_info;
-    frag_shader_create_info.stage = _fragment_shader.stage_flag;
-    frag_shader_create_info.nextStage = 0;
-    frag_shader_create_info.codeSize =
-        sizeof(shader_gen::canvas_sd::fragment_spv);
-    frag_shader_create_info.pCode = shader_gen::canvas_sd::fragment_spv;
-
-    VkShaderEXT shader_exts[2];
-
-    AssertVkResult(vkCreateShadersEXT(
-        driver->GetDevice(), 2, shader_create_infos, nullptr, shader_exts));
-    _vertex_shader.shader = shader_exts[0];
-    _fragment_shader.shader = shader_exts[1];
-  }
-  {
-    VkCommandBufferAllocateInfo command_buffer_allocate_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .pNext = nullptr,
-        .commandPool = driver->GetCommandPool(),
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1,
-    };
-    AssertVkResult(vkAllocateCommandBuffers(
-        driver->GetDevice(), &command_buffer_allocate_info, &_command_buffer));
-    RecordCommandBuffer();
-  }
-}
-
-void ModelRenderer::RecordCommandBuffer() {
-  auto *driver = VulkanDriver::GetSingleton();
-  uint32_t index = driver->GetCurrentSwapchainImageIndex();
-  {
-    const auto &images = driver->GetSwapchainImages();
-    driver->HTransitionImageLayout(
-        _command_buffer, images[index], 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-  }
-
-  {
-    VkRenderingAttachmentInfo att_info = {};
-    const auto &views = driver->GetSwapchainImageViews();
-    att_info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    att_info.imageView = views[index];
-    att_info.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    att_info.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    att_info.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    att_info.clearValue = {.color = {0.0f, 0.0f, 0.0f, 1.0f}};
-    att_info.resolveMode = VK_RESOLVE_MODE_NONE;
-
-    // render_info
-    VkRenderingInfo render_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .renderArea =
-            {
-                .offset = {0, 0},
-                .extent = driver->GetSwapchainExtent(),
-            },
-        .layerCount = 1,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &att_info,
-    };
-    vkCmdBeginRenderingKHR(_command_buffer, &render_info);
-  }
-  {
-    vkCmdSetCullMode(_command_buffer, VK_CULL_MODE_NONE);
-    vkCmdSetDepthTestEnable(_command_buffer, VK_FALSE);
-    vkCmdSetDepthWriteEnable(_command_buffer, VK_FALSE);
-  }
-
-  // write desciptor
-  {
-
-  }
-
-  {
-    vkCmdEndRenderingKHR(_command_buffer);
-  }
-}
-void ModelRenderer::AddLayer(Layer2dResource *layer) {}
-ModelRenderer::~ModelRenderer() {
-  auto *driver = VulkanDriver::GetSingleton();
-  _vertex_shader.Destroy(driver->GetDevice());
-  _fragment_shader.Destroy(driver->GetDevice());
-
-  vkDestroyDescriptorSetLayout(driver->GetDevice(), _descriptor_set_layout,
-                               nullptr);
-  vkDestroySampler(driver->GetDevice(), _layer_sampler, nullptr);
-}
-void ModelRenderer::Render() {}
-
-Layer2dResource::~Layer2dResource() {
-  auto *driver = VulkanDriver::GetSingleton();
-  vmaDestroyImage(driver->GetVmaAllocator(), _image, _allocation);
-  vkDestroyImageView(driver->GetDevice(), _image_view, nullptr);
-}
 
 std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
     const ImageConfig &config) {
@@ -172,8 +22,8 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
   // upload data
   auto *cpu_image = config.pimage;
 
-  VkDeviceSize size =
-      static_cast<int64_t>(cpu_image->width * cpu_image->height * cpu_image->channels);
+  VkDeviceSize size = static_cast<int64_t>(
+      cpu_image->width * cpu_image->height * cpu_image->channels);
 
   VkBuffer staging_buffer;
   VmaAllocation staging_allocation;
@@ -250,6 +100,36 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+  result->_vertices =
+      std::vector<ModelVertex>(config.vertices.begin(), config.vertices.end());
+  result->_indices =
+      std::vector<uint32_t>(config.indices.begin(), config.indices.end());
+
+  // create vertex buffer
+  driver->HCreateBuffer(
+      sizeof(ModelVertex) * result->_vertices.size(),
+      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+      VMA_MEMORY_USAGE_CPU_TO_GPU, result->_vertex_buffer._buffer,
+      result->_vertex_buffer._allocation);
+
+  // copy vertex data
+  vmaMapMemory(driver->GetVmaAllocator(), result->_vertex_buffer._allocation,
+               &data);
+
+  memcpy(data, result->_vertices.data(),
+         sizeof(ModelVertex) * result->_vertices.size());
+  vmaUnmapMemory(driver->GetVmaAllocator(), result->_vertex_buffer._allocation);
+
+  // create index buffer
+  driver->HCreateBuffer(
+      sizeof(uint32_t) * result->_indices.size(),
+      VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+      VMA_MEMORY_USAGE_CPU_TO_GPU, result->_index_buffer._buffer,
+      result->_index_buffer._allocation);
+  vmaMapMemory(driver->GetVmaAllocator(),
+               result->_index_buffer._allocation, &data);
+
+
   driver->HEndOneTimeCommandBuffer(single_command_buffer,
                                    driver->GetGraphicsQueue());
 
@@ -283,11 +163,209 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
   AssertVkResult(vkCreateImageView(driver->GetDevice(), &image_view_info,
                                    nullptr, &result->_image_view),
                  "Failed to create image view");
-  result->_vertices =
-      std::vector<ModelVertex>(config.vertices.begin(), config.vertices.end());
-  result->_indices =
-      std::vector<uint32_t>(config.indices.begin(), config.indices.end());
+
   return result;
 };
+
+Layer2dResource::~Layer2dResource() {
+  auto *driver = VulkanDriver::GetSingleton();
+  vmaDestroyImage(driver->GetVmaAllocator(), _image, _allocation);
+  vkDestroyImageView(driver->GetDevice(), _image_view, nullptr);
+  vmaDestroyBuffer(driver->GetVmaAllocator(), _vertex_buffer._buffer,
+                   _vertex_buffer._allocation);
+  vmaDestroyBuffer(driver->GetVmaAllocator(), _index_buffer._buffer,
+                   _index_buffer._allocation);
+}
+
+ModelRenderer::ModelRenderer() {
+  const auto *driver = VulkanDriver::GetSingleton();
+  assert(driver != nullptr && "driver isn't init");
+  {
+    _sampler = driver->HCreateSimpleSampler();
+  }
+  {
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
+    bindings.push_back({
+        .binding = shader_gen::canvas_sd::ubo.binding,
+        .descriptorType = shader_gen::canvas_sd::ubo.desc_type,
+        .descriptorCount = 1,
+        .stageFlags = shader_gen::canvas_sd::ubo.stages,
+    });
+    bindings.push_back({
+        .binding = shader_gen::canvas_sd::main_tex.binding,
+        .descriptorType = shader_gen::canvas_sd::main_tex.desc_type,
+        .descriptorCount = 1,
+        .stageFlags = shader_gen::canvas_sd::main_tex.stages,
+    });
+
+    VkDescriptorSetLayoutCreateInfo set0_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
+        .bindingCount = static_cast<uint32_t>(bindings.size()),
+        .pBindings = bindings.data(),
+    };
+    vkCreateDescriptorSetLayout(driver->GetDevice(), &set0_info, nullptr,
+                                &_descriptor_set_layout);
+
+    // pipeline layout
+    VkPipelineLayoutCreateInfo pipeline_layout_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .setLayoutCount = 1,
+        .pSetLayouts = &_descriptor_set_layout,
+        .pushConstantRangeCount = 0,
+        .pPushConstantRanges = nullptr,
+    };
+    AssertVkResult(
+        vkCreatePipelineLayout(driver->GetDevice(), &pipeline_layout_info,
+                               nullptr, &_pipeline_layout),
+        "Failed to create pipeline layout");
+  }
+  {
+    // shader objects
+    _vertex_shader.stage_flag = VK_SHADER_STAGE_VERTEX_BIT;
+    _fragment_shader.stage_flag = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkShaderCreateInfoEXT shader_create_infos[2];
+    VkShaderCreateInfoEXT &vert_shader_create_info = shader_create_infos[0];
+    vert_shader_create_info = {};
+    vert_shader_create_info.sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT;
+    vert_shader_create_info.pNext = nullptr;
+    vert_shader_create_info.pName = "main";
+    vert_shader_create_info.flags = VK_SHADER_CREATE_LINK_STAGE_BIT_EXT;
+    vert_shader_create_info.stage = _vertex_shader.stage_flag;
+    vert_shader_create_info.nextStage = _fragment_shader.stage_flag;
+    vert_shader_create_info.codeType = VK_SHADER_CODE_TYPE_SPIRV_EXT;
+    vert_shader_create_info.codeSize =
+        sizeof(shader_gen::canvas_sd::vertex_spv);
+    vert_shader_create_info.pCode = shader_gen::canvas_sd::vertex_spv;
+    vert_shader_create_info.setLayoutCount = 1;
+    vert_shader_create_info.pSetLayouts = &_descriptor_set_layout;
+
+    VkShaderCreateInfoEXT &frag_shader_create_info = shader_create_infos[1];
+    frag_shader_create_info = vert_shader_create_info;
+    frag_shader_create_info.stage = _fragment_shader.stage_flag;
+    frag_shader_create_info.nextStage = 0;
+    frag_shader_create_info.codeSize =
+        sizeof(shader_gen::canvas_sd::fragment_spv);
+    frag_shader_create_info.pCode = shader_gen::canvas_sd::fragment_spv;
+
+    VkShaderEXT shader_exts[2];
+
+    AssertVkResult(vkCreateShadersEXT(
+        driver->GetDevice(), 2, shader_create_infos, nullptr, shader_exts));
+    _vertex_shader.shader = shader_exts[0];
+    _fragment_shader.shader = shader_exts[1];
+  }
+  {
+    VkCommandBufferAllocateInfo command_buffer_allocate_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext = nullptr,
+        .commandPool = driver->GetCommandPool(),
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    AssertVkResult(vkAllocateCommandBuffers(
+        driver->GetDevice(), &command_buffer_allocate_info, &_command_buffer));
+    RecordCommandBuffer();
+  }
+}
+
+void ModelRenderer::RecordCommandBuffer() {
+  // begin record command buffer
+
+  VkCommandBufferBeginInfo begin_info = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .pNext = nullptr,
+  };
+  AssertVkResult(vkBeginCommandBuffer(_command_buffer, &begin_info),
+                 "Failed to begin command buffer");
+
+  auto *driver = VulkanDriver::GetSingleton();
+  uint32_t index = driver->GetCurrentSwapchainImageIndex();
+  {
+    const auto &images = driver->GetSwapchainImages();
+    driver->HTransitionImageLayout(
+        _command_buffer, images[index], 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+  }
+
+  {
+    VkRenderingAttachmentInfo att_info = {};
+    const auto &views = driver->GetSwapchainImageViews();
+    att_info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    att_info.imageView = views[index];
+    att_info.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    att_info.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    att_info.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    att_info.clearValue = {.color = {0.0f, 0.0f, 0.0f, 1.0f}};
+    att_info.resolveMode = VK_RESOLVE_MODE_NONE;
+
+    // render_info
+    VkRenderingInfo render_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .renderArea =
+            {
+                .offset = {0, 0},
+                .extent = driver->GetSwapchainExtent(),
+            },
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &att_info,
+    };
+    vkCmdBeginRenderingKHR(_command_buffer, &render_info);
+  }
+  {
+    vkCmdSetCullModeEXT(_command_buffer, VK_CULL_MODE_NONE);
+    vkCmdSetDepthTestEnableEXT(_command_buffer, VK_FALSE);
+    vkCmdSetDepthWriteEnableEXT(_command_buffer, VK_FALSE);
+  }
+
+  {
+    for (uint32_t i = 0; i < _render_layers.size(); ++i) {
+      BindLayerDescriptorSet(i);
+    }
+  }
+  {
+    vkCmdEndRenderingKHR(_command_buffer);
+  }
+}
+void ModelRenderer::BindLayerDescriptorSet(uint32_t index) const {
+  VkDescriptorImageInfo image_info = {
+      .sampler = _sampler,
+      .imageView = _render_layers[index]->_image_view,
+      .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+  };
+  VkWriteDescriptorSet write_set = {
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .pNext = nullptr,
+      .dstSet = nullptr,
+      .dstBinding = shader_gen::canvas_sd::main_tex.binding,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = shader_gen::canvas_sd::main_tex.desc_type,
+      .pImageInfo = &image_info,
+  };
+  vkCmdPushDescriptorSetKHR(_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            _pipeline_layout, 0, 1, &write_set);
+}
+void ModelRenderer::AddLayer(Layer2dResource *layer) {}
+ModelRenderer::~ModelRenderer() {
+  auto *driver = VulkanDriver::GetSingleton();
+  _vertex_shader.Destroy(driver->GetDevice());
+  _fragment_shader.Destroy(driver->GetDevice());
+  vkDestroySampler(driver->GetDevice(), _sampler, nullptr);
+
+  vkDestroyDescriptorSetLayout(driver->GetDevice(), _descriptor_set_layout,
+                               nullptr);
+  vkDestroySampler(driver->GetDevice(), _layer_sampler, nullptr);
+}
+void ModelRenderer::Render() {}
 
 }  // namespace rdc

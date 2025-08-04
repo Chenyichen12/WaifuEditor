@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <iostream>
 #include <set>
+
 #include "vulkan/vulkan_core.h"
 
 namespace {
@@ -18,7 +19,7 @@ void AddContainer(std::vector<const char *> &container, const char *item) {
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
 DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-              VkDebugUtilsMessageTypeFlagsEXT  /*messageType*/,
+              VkDebugUtilsMessageTypeFlagsEXT /*messageType*/,
               const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
               void * /*pUserData*/) {
   if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT ||
@@ -171,12 +172,6 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
 
     std::vector<VkDeviceQueueCreateInfo> queue_infos;
     float queue_priority = 1.0f;
-    // VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_features =
-    // {
-    //     .sType =
-    //     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES, .pNext
-    //     = nullptr, .dynamicRendering = VK_TRUE,
-    // };
     for (const auto &family_index : unique_queue_families) {
       VkDeviceQueueCreateInfo queue_info = {
           .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -198,11 +193,25 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
     AddContainer(device_extensions,
                  VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME);
     AddContainer(device_extensions, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
+    AddContainer(device_extensions,
+                 VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME);
+    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT dynamic_state_ext = {
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
+        .extendedDynamicState = VK_TRUE,
+    };
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_features = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+        .pNext = &dynamic_state_ext,
+        .dynamicRendering = VK_TRUE,
+
+    };
 
     VkPhysicalDeviceShaderObjectFeaturesEXT shader_object_features = {};
     shader_object_features.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT;
     shader_object_features.shaderObject = VK_TRUE;
+    shader_object_features.pNext = &dynamic_rendering_features;
 
     VkDeviceCreateInfo device_info = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -323,8 +332,8 @@ void VulkanDriver::CreateSwapchain(const VkExtent2D &extent) {
   _swapchain_packet.images.resize(image_count);
   _swapchain_packet.image_views.resize(image_count);
   AssertVkResult(
-      vkGetSwapchainImagesKHR(_device, _swapchain_packet.swapchain, &image_count,
-                              _swapchain_packet.images.data()),
+      vkGetSwapchainImagesKHR(_device, _swapchain_packet.swapchain,
+                              &image_count, _swapchain_packet.images.data()),
       "Failed to get swapchain images");
 
   for (size_t i = 0; i < _swapchain_packet.images.size(); ++i) {
@@ -419,10 +428,10 @@ void VulkanDriver::HEndOneTimeCommandBuffer(
 }
 
 void VulkanDriver::HTransitionImageLayout(
-    const VkCommandBuffer &cmd, const VkImage &image, 
-    const VkAccessFlags src, const VkAccessFlags dst,
-    const VkPipelineStageFlags src_stage, const VkPipelineStageFlags dst_stage,
-    const VkImageLayout old_layout, const VkImageLayout new_layout,
+    const VkCommandBuffer &cmd, const VkImage &image, const VkAccessFlags src,
+    const VkAccessFlags dst, const VkPipelineStageFlags src_stage,
+    const VkPipelineStageFlags dst_stage, const VkImageLayout old_layout,
+    const VkImageLayout new_layout,
     const VkImageSubresourceRange &range) const {
   VkImageMemoryBarrier barrier = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -529,5 +538,5 @@ void VulkanDriver::SwapchainPacket::Destroy(VkDevice device) {
   }
   vkDestroySwapchainKHR(device, swapchain, nullptr);
 }
-VulkanDriver* VulkanDriver::singleton_driver = nullptr;
+VulkanDriver *VulkanDriver::singleton_driver = nullptr;
 }  // namespace rdc
