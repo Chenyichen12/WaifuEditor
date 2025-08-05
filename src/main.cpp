@@ -1,15 +1,17 @@
-
-#include <vulkan/vulkan.h>
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <fstream>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <vector>
 
 #include "render_core/renderer.h"
 #include "render_core/vulkan_driver.h"
 class AppWindow {
   GLFWwindow *_window;
-  rdc::ModelRenderer* _renderer = nullptr;
+  rdc::ModelRenderer *_renderer = nullptr;
+  rdc::RenderResourceManager *_resource_manager = nullptr;
 
   VkResult CreateVulkanSurface(VkInstance instance, VkSurfaceKHR &surface) {
     if (glfwCreateWindowSurface(instance, _window, nullptr, &surface) !=
@@ -57,13 +59,72 @@ class AppWindow {
     rdc::VulkanDriver::InitSingleton(config);
     _renderer = new rdc::ModelRenderer();
 
+    // read layer
+    _resource_manager = new rdc::RenderResourceManager();
+    nlohmann::json layer_config;
+    {
+      std::ifstream layer_file("../test/layers.json");
+      if (!layer_file.is_open()) {
+        std::cerr << "Failed to open layers.json\n";
+        std::abort();
+      }
+      layer_file >> layer_config;
+      layer_file.close();
+
+      for (const auto &layer : layer_config["layers"]) {
+        auto vertex_struct = layer["vertices"];
+        auto position_array =
+            vertex_struct["position"].get<std::vector<float>>();
+        auto uv_array = vertex_struct["uv"].get<std::vector<float>>();
+        auto index_array = vertex_struct["index"].get<std::vector<uint32_t>>();
+
+        std::string file_path = layer["path"];
+        file_path = "../test/" + file_path;
+        CPUImage cpu_image;
+        cpu_image.LoadFromFile(file_path);
+        if (!cpu_image.IsValid()) {
+          std::cerr << "Failed to load image: " << file_path << "\n";
+          continue;
+        }
+        rdc::Layer2dResource::ImageConfig image_config;
+        image_config.pimage = &cpu_image;
+        image_config.format = VK_FORMAT_R8G8B8A8_UNORM;
+        std::vector<rdc::ModelVertex> vertices(position_array.size() / 2);
+        for (int i = 0; i < position_array.size(); i += 2) {
+          auto &vertex = vertices[i / 2];
+          vertex.position.x = position_array[i];
+          vertex.position.y = position_array[i + 1];
+          vertex.uv.x = uv_array[i];
+          vertex.uv.y = uv_array[i + 1];
+        }
+
+        rdc::Layer2dResource::ImageConfig const texture_config{
+            .pimage = &cpu_image,
+            .format = VK_FORMAT_R8G8B8A8_SRGB,
+            .vertices = vertices,
+            .indices = index_array,
+        };
+        auto layer_resource =
+            rdc::Layer2dResource::CreateFromImage(texture_config);
+        if (!layer_resource) {
+          std::cerr << "Failed to create layer resource from image\n";
+          continue;
+        }
+        auto* res = _resource_manager->AddResource(std::move(layer_resource));
+        _renderer->AddLayer(res);
+
+        std::cout << position_array[0] << " " << uv_array[0] << "\n";
+      }
+    }
   }
   void Run() {
     while (!glfwWindowShouldClose(_window)) {
       glfwPollEvents();
+      _renderer->Render();
     }
   }
   ~AppWindow() {
+    delete _resource_manager;
     delete _renderer;
     rdc::VulkanDriver::CleanupSingleton();
 

@@ -1,9 +1,10 @@
 #include "vulkan_driver.h"
 
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <set>
-#include <cstring>
+
 #include "vulkan/vulkan_core.h"
 
 namespace {
@@ -265,10 +266,10 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
 
   // create command pool
   {
-    VkCommandPoolCreateInfo command_pool_info = {
+    VkCommandPoolCreateInfo const command_pool_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .pNext = nullptr,
-        .flags = 0,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = _queue_packet.graphics_queue_family_index,
     };
     AssertVkResult(vkCreateCommandPool(_device, &command_pool_info, nullptr,
@@ -425,6 +426,20 @@ void VulkanDriver::HEndOneTimeCommandBuffer(
   vkQueueSubmit(submit_queue, 1, &submit_info, VK_NULL_HANDLE);
   vkQueueWaitIdle(submit_queue);
   vkFreeCommandBuffers(_device, _command_pool, 1, &command_buffer);
+}
+VkCommandBuffer VulkanDriver::HCreateOneCommandBuffer() const {
+  VkCommandBufferAllocateInfo const alloc_info = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .pNext = nullptr,
+      .commandPool = _command_pool,
+      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+      .commandBufferCount = 1,
+  };
+  VkCommandBuffer command_buffer;
+  AssertVkResult(
+      vkAllocateCommandBuffers(_device, &alloc_info, &command_buffer),
+      "Failed to allocate command buffer");
+  return command_buffer;
 }
 
 void VulkanDriver::HTransitionImageLayout(

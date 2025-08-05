@@ -6,6 +6,62 @@ import json
 import argparse
 
 
+pixel_layers: List[PixelLayer] = []
+def get_pixel_layer(layer: Layer):
+    if layer.kind == 'pixel':
+        pixel_layers.append(cast(PixelLayer, layer))
+    if layer.kind == 'group':
+        group = cast(Group, layer)
+        for child in group:
+            get_pixel_layer(child)
+    pass
+
+
+
+def save_pixel_layers(layers: List[PixelLayer], output_dir: str):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    for layer in layers:
+        print (f"Saving layer: {layer.name}")
+        comp = layer.composite()
+        name = layer.name.replace(" ", "").replace('\x00', "")
+        assert comp is not None, f"Layer {name} has no composite image."
+        output_path = os.path.join(output_dir, f"{name}.png")
+        comp.save(output_path)
+
+def generate_layer_points(layer: PixelLayer) -> Dict[str, Any]:
+    left = layer.left
+    top = layer.top
+    right = layer.right
+    bottom = layer.bottom
+    return {
+        "position": [left, top, right, top, right, bottom, left, bottom],
+        "uv": [0, 0, 1, 0, 1, 1, 0, 1],
+        "index": [0, 1, 2, 0, 2, 3],
+    }
+# should in order to list
+
+def generate_pixel_layers_meta(layers: List[PixelLayer], pev: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    meta = {}
+    if pev is not None:
+        meta = pev
+
+    meta['layers'] = []
+    for layer in layers:
+        layer_meta = {
+            'path': layer.name.strip().replace('\x00', "") + '.png',
+            'vertices': generate_layer_points(layer),
+            'width': layer.width,
+            'height': layer.height
+        }
+        meta['layers'].append(layer_meta)
+
+    return meta
+
+def save_pixel_layer_meta(meta: Dict[str, Any], output_path: str):
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(meta, f, ensure_ascii=False, indent=4)
+
 def main():
     parser = argparse.ArgumentParser(
         description='Convert PSD file to pixel layers.')
@@ -25,64 +81,10 @@ def main():
 
     psd = PSDImage.open(args.input)
 
-    pixel_layers: List[PixelLayer] = []
-
-    def get_pixel_layer(layer: Layer):
-        if (layer.kind == 'pixel'):
-            pixel_layers.append(cast(PixelLayer, layer))
-        if (layer.kind == 'group'):
-            group = cast(Group, layer)
-            for child in group:
-                get_pixel_layer(child)
-        pass
 
     for layer in psd:
         get_pixel_layer(layer)
 
-    def save_pixel_layers(layers: List[PixelLayer], output_dir: str):
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        for layer in layers:
-            print (f"Saving layer: {layer.name}")
-            comp = layer.composite()
-            name = layer.name.replace(" ", "").replace('\x00', "")
-            assert comp is not None, f"Layer {name} has no composite image."
-            output_path = os.path.join(output_dir, f"{name}.png")
-            comp.save(output_path)
-
-    def generate_layer_points(layer: PixelLayer) -> Dict[str, Any]:
-        left = layer.left
-        top = layer.top
-        right = layer.right
-        bottom = layer.bottom
-        return {
-            "position": [left, top, right, top, right, bottom, left, bottom],
-            "uv": [0, 1, 2, 0, 2, 3],
-        }
-    # should in order to list
-
-    def generate_pixel_layers_meta(layers: List[PixelLayer], pev: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        meta = {}
-        if (pev is not None):
-            meta = pev
-
-        meta['layers'] = []
-        for layer in layers:
-            layer_meta = {
-                'path': layer.name.strip().replace('\x00', "") + '.png',
-                'vertices': generate_layer_points(layer),
-                'width': layer.width,
-                'height': layer.height
-            }
-            meta['layers'].append(layer_meta)
-
-        return meta
-        pass
-
-    def save_pixel_layer_meta(meta: Dict[str, Any], output_path: str):
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(meta, f, ensure_ascii=False, indent=4)
-    
     print("Writing project data")
     meta = {}
     meta['version'] = '0.0.1'

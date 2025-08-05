@@ -73,7 +73,7 @@ class UnifromStructVariable(TypedDict):
     stage: List[str]
 
 
-class UniformVarible(TypedDict):
+class UniformVariable(TypedDict):
     name: str
     type: str
     binding: int
@@ -133,8 +133,8 @@ def parse_shader_structs_uniforms(content: str):
     return values
 
 
-def parse_shader_uniforms(content: str) -> List[UniformVarible]:
-    values: List[UniformVarible] = []
+def parse_shader_uniforms(content: str) -> List[UniformVariable]:
+    values: List[UniformVariable] = []
     variable_pattern = re.compile(
         r'layout\s*\(\s*binding\s*=\s*(\d+)\s*\)\s+uniform\s+(\w+)\s+(\w+)\s*;(\s*//\s*(.*))?'
     )
@@ -174,6 +174,7 @@ def parse_shader_uniforms(content: str) -> List[UniformVarible]:
             "type": var_type,
             "binding": binding_index,
             "name": var_name,
+            "stage": ["vertex", "fragment"]
         })
 
     return values
@@ -184,7 +185,7 @@ def parse_shader_outputs(content: str) -> List[OutputVariable]:
     # output should in frag content
     pattern = r"#ifdef FRAGMENT(.*?)#endif"
     matches = re.findall(pattern, content, re.DOTALL)
-    if (len(matches) == 0):
+    if len(matches) == 0:
         raise ValueError("未找到片段着色器内容")
     frag_content = matches[0]
 
@@ -223,7 +224,7 @@ def parse_shader_outputs(content: str) -> List[OutputVariable]:
 
 class ShaderHeaderGenerator:
     _output_val: List[OutputVariable]
-    _uniforms: List[UniformVarible]
+    _uniforms: List[UniformVariable]
     _structs: List[UnifromStructVariable]
     _vertex_shader: str
     _fragment_shader: str
@@ -232,7 +233,7 @@ class ShaderHeaderGenerator:
     _glslc_path: str
 
     def __init__(self, vertex_shader: str, fragment_shader: str,
-                 uniforms: List[UniformVarible], structs: List[UnifromStructVariable],
+                 uniforms: List[UniformVariable], structs: List[UnifromStructVariable],
                  outputs_val: List[OutputVariable], shader_path: str,
                  glslc_path: str = "glslc"):
         self._vertex_shader = vertex_shader

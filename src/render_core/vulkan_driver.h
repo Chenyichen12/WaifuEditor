@@ -116,6 +116,7 @@ class VulkanDriver {
   VkCommandBuffer HBeginOneTimeCommandBuffer() const;
   void HEndOneTimeCommandBuffer(const VkCommandBuffer &command_buffer,
                                 const VkQueue &submit_queue) const;
+  VkCommandBuffer HCreateOneCommandBuffer() const;
 
   enum class TransitionState : uint8_t {
     kInit2Transfer,

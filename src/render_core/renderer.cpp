@@ -307,7 +307,7 @@ ModelRenderer::ModelRenderer() {
     };
     AssertVkResult(vkAllocateCommandBuffers(
         driver->GetDevice(), &command_buffer_allocate_info, &_command_buffer));
-    RecordCommandBuffer();
+    // RecordCommandBuffer();
   }
 }
 
@@ -376,6 +376,8 @@ void ModelRenderer::RecordCommandBuffer() {
   {
     vkCmdEndRenderingKHR(_command_buffer);
   }
+
+  vkEndCommandBuffer(_command_buffer);
 }
 
 void ModelRenderer::BindLayerDrawCommand(uint32_t index) const {
@@ -403,9 +405,10 @@ void ModelRenderer::BindLayerDrawCommand(uint32_t index) const {
   vkCmdBindVertexBuffers(_command_buffer, 0, 1, &vertex_buffer, &kOffset);
   vkCmdBindIndexBuffer(_command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
 }
-void ModelRenderer::AddLayer(Layer2dResource *layer) {}
+void ModelRenderer::AddLayer(Layer2dResource *layer) {
+  _render_layers.push_back(layer);
+}
 ModelRenderer::~ModelRenderer() {
-
   auto *driver = VulkanDriver::GetSingleton();
   _vertex_shader.Destroy(driver->GetDevice());
   _fragment_shader.Destroy(driver->GetDevice());
@@ -416,6 +419,13 @@ ModelRenderer::~ModelRenderer() {
   vkDestroyPipelineLayout(driver->GetDevice(), _pipeline_layout, nullptr);
   vkDestroySampler(driver->GetDevice(), _layer_sampler, nullptr);
 }
-void ModelRenderer::Render() {}
+void ModelRenderer::Render() {
+  auto *driver = VulkanDriver::GetSingleton();
+  vkDeviceWaitIdle(driver->GetDevice());
+  // reset command buffer
+  vkResetCommandBuffer(_command_buffer,
+                       VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+  RecordCommandBuffer();
+}
 
 }  // namespace rdc

@@ -6,6 +6,7 @@
 #define EDITOR_TYPES_HPP
 #include <stb_image.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -19,19 +20,26 @@ class CPUImage {
   std::function<void()> deleter = nullptr;
 
   CPUImage() = default;
-  CPUImage(const CPUImage& i) {
-    width = i.width;
-    height = i.height;
-    channels = i.channels;
-    data = new uint8_t[width * height * channels];
-    memcpy(data, i.data, width * height * channels);
+  CPUImage(const CPUImage& img) {
+    width = img.width;
+    height = img.height;
+    channels = img.channels;
+    data = new uint8_t[static_cast<uint64_t>(width * height * channels)];
+    memcpy(data, img.data, width * height * channels);
     deleter = [this]() {
       free(data);
       data = nullptr;
     };
   }
+  CPUImage(CPUImage&& img) noexcept
+      : width(img.width), height(img.height), channels(img.channels), data(img.data) {
+    deleter = img.deleter;
+    img.data = nullptr;
+    img.deleter = nullptr;
+  }
 
-  bool IsValid() { return data != nullptr; }
+
+  bool IsValid() const { return data != nullptr; }
 
   void LoadFromFile(const std::string& file_path) {
     data = stbi_load(file_path.c_str(), reinterpret_cast<int*>(&width),
