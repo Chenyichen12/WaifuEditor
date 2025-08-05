@@ -73,6 +73,13 @@ class ModelRenderer {
   Shader _fragment_shader;
 
   VkCommandBuffer _command_buffer = VK_NULL_HANDLE;
+  struct Region {
+    int x;
+    int y;
+    uint32_t width;
+    uint32_t height;
+  } _region = {0, 0, 800, 600};
+
   void RecordCommandBuffer();
   // cmd
   void BindLayerDrawCommand(uint32_t index) const;
@@ -82,6 +89,7 @@ class ModelRenderer {
   void AddLayer(Layer2dResource *layer);
   std::span<Layer2dResource *> GetLayers() { return _render_layers; }
   ~ModelRenderer();
+  void SetRegion(int pos_x, int pos_y, uint32_t width, uint32_t height);
 
   void Render();
 };

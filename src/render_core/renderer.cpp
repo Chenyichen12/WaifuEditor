@@ -363,10 +363,54 @@ void ModelRenderer::RecordCommandBuffer() {
     vkCmdSetCullModeEXT(_command_buffer, VK_CULL_MODE_NONE);
     vkCmdSetDepthTestEnableEXT(_command_buffer, VK_FALSE);
     vkCmdSetDepthWriteEnableEXT(_command_buffer, VK_FALSE);
+    vkCmdSetRasterizerDiscardEnableEXT(_command_buffer, VK_FALSE);
+    vkCmdSetStencilTestEnableEXT(_command_buffer, VK_FALSE);
+    vkCmdSetDepthBiasEnableEXT(_command_buffer, VK_FALSE);
+    vkCmdSetRasterizationSamplesEXT(_command_buffer, VK_SAMPLE_COUNT_1_BIT);
+    VkSampleMask mask = ~0u;
+    vkCmdSetSampleMaskEXT(_command_buffer, VK_SAMPLE_COUNT_1_BIT, &mask);
+    vkCmdSetAlphaToOneEnableEXT(_command_buffer, VK_FALSE);
+    vkCmdSetAlphaToCoverageEnableEXT(_command_buffer, VK_FALSE);
+
+    vkCmdSetPolygonModeEXT(_command_buffer, VK_POLYGON_MODE_FILL);
+    vkCmdSetPrimitiveTopologyEXT(_command_buffer,
+                              VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    vkCmdSetPrimitiveRestartEnableEXT(_command_buffer, VK_FALSE);
+
+    VkBool32 blendEnable = VK_FALSE;
+    vkCmdSetColorBlendEnableEXT(_command_buffer, 0 /* firstAttachment */,
+                                1 /* count */, &blendEnable);
+    VkColorComponentFlags color_mask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    vkCmdSetColorWriteMaskEXT(_command_buffer, 0 /* firstAttachment */,
+                              1 /* count */, &color_mask);
+
+    VkViewport viewport = {static_cast<float>(_region.x),
+                           static_cast<float>(_region.y),
+                           static_cast<float>(_region.width),
+                           static_cast<float>(_region.height),
+                           0.0f,
+                           1.0f};
+    vkCmdSetViewportWithCountEXT(_command_buffer, 1, &viewport);
+    VkRect2D scissor = {
+        .offset = {_region.x, _region.y},
+        .extent = {_region.width, _region.height},
+    };
+
+    vkCmdSetScissorWithCountEXT(_command_buffer, 1, &scissor);
   }
 
   {
     SetVertexInput(_command_buffer);
+    auto shader_stages = std::array<VkShaderEXT, 2>{_vertex_shader.shader,
+                                                    _fragment_shader.shader};
+    auto shader_bits = std::array<VkShaderStageFlagBits, 2>{
+        _vertex_shader.stage_flag, _fragment_shader.stage_flag};
+    vkCmdBindShadersEXT(_command_buffer,
+                        static_cast<uint32_t>(shader_stages.size()),
+                        shader_bits.data(), shader_stages.data());
     for (uint32_t i = 0; i < _render_layers.size(); ++i) {
       BindLayerDrawCommand(i);
       vkCmdDrawIndexed(_command_buffer, _render_layers[i]->GetIndexCount(), 1,
@@ -418,6 +462,13 @@ ModelRenderer::~ModelRenderer() {
                                nullptr);
   vkDestroyPipelineLayout(driver->GetDevice(), _pipeline_layout, nullptr);
   vkDestroySampler(driver->GetDevice(), _layer_sampler, nullptr);
+}
+void ModelRenderer::SetRegion(const int pos_x, const int pos_y,
+                              const uint32_t width, const uint32_t height) {
+  _region.x = pos_x;
+  _region.y = pos_y;
+  _region.width = width;
+  _region.height = height;
 }
 void ModelRenderer::Render() {
   auto *driver = VulkanDriver::GetSingleton();
