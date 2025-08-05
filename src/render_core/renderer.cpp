@@ -1,13 +1,49 @@
 #include "renderer.h"
 
+#include <array>
 #include <cassert>
-#include <cstdint>
 #include <memory>
 #include <vector>
 
 #include "canvas_sd.gen.h"
 #include "vulkan/vulkan_core.h"
 #include "vulkan_driver.h"
+
+namespace {
+
+void SetVertexInput(VkCommandBuffer cmd) {
+  VkVertexInputBindingDescription2EXT const bindings = {
+      .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
+      .binding = 0,
+      .stride = sizeof(rdc::ModelVertex),
+      .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+      .divisor = 1,
+  };
+
+  // VkVertexInputAttributeDescription attribute[2];
+  std::array<VkVertexInputAttributeDescription2EXT, 2> attributes;
+  attributes[0] = {
+      .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+      .location = 0,
+      .binding = 0,
+      .format = VK_FORMAT_R32G32_SFLOAT,
+      .offset = offsetof(rdc::ModelVertex, position),
+  };
+
+  attributes[1] = {
+      .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+      .location = 1,
+      .binding = 0,
+      .format = VK_FORMAT_R32G32_SFLOAT,
+      .offset = offsetof(rdc::ModelVertex, uv),
+  };
+
+  vkCmdSetVertexInputEXT(cmd, 1, &bindings,
+                         static_cast<uint32_t>(attributes.size()),
+                         attributes.data());
+}
+
+}  // namespace
 
 namespace rdc {
 
@@ -22,7 +58,7 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
   // upload data
   auto *cpu_image = config.pimage;
 
-  VkDeviceSize size = static_cast<int64_t>(
+  VkDeviceSize const size = static_cast<int64_t>(
       cpu_image->width * cpu_image->height * cpu_image->channels);
 
   VkBuffer staging_buffer;
@@ -36,11 +72,11 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
   vmaUnmapMemory(driver->GetVmaAllocator(), staging_allocation);
 
   // create vkimage
-  VmaAllocationCreateInfo alloc_info = {
+  VmaAllocationCreateInfo const alloc_info = {
       .usage = VMA_MEMORY_USAGE_GPU_ONLY,
       .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
   };
-  VkImageCreateInfo image_info = {
+  VkImageCreateInfo const image_info = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
@@ -72,7 +108,7 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
       single_command_buffer, result->_image, 0, VK_ACCESS_TRANSFER_WRITE_BIT,
       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-  VkBufferImageCopy copy_region = {
+  VkBufferImageCopy const copy_region = {
       .bufferOffset = 0,
       .bufferRowLength = 0,
       .bufferImageHeight = 0,
@@ -126,9 +162,11 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
       VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
       VMA_MEMORY_USAGE_CPU_TO_GPU, result->_index_buffer._buffer,
       result->_index_buffer._allocation);
-  vmaMapMemory(driver->GetVmaAllocator(),
-               result->_index_buffer._allocation, &data);
-
+  vmaMapMemory(driver->GetVmaAllocator(), result->_index_buffer._allocation,
+               &data);
+  memcpy(data, result->_indices.data(),
+         sizeof(uint32_t) * result->_indices.size());
+  vmaUnmapMemory(driver->GetVmaAllocator(), result->_index_buffer._allocation);
 
   driver->HEndOneTimeCommandBuffer(single_command_buffer,
                                    driver->GetGraphicsQueue());
@@ -137,7 +175,7 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
                    staging_allocation);
 
   // create image view
-  VkImageViewCreateInfo image_view_info = {
+  VkImageViewCreateInfo const image_view_info = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
@@ -165,7 +203,7 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
                  "Failed to create image view");
 
   return result;
-};
+}
 
 Layer2dResource::~Layer2dResource() {
   auto *driver = VulkanDriver::GetSingleton();
@@ -198,7 +236,7 @@ ModelRenderer::ModelRenderer() {
         .stageFlags = shader_gen::canvas_sd::main_tex.stages,
     });
 
-    VkDescriptorSetLayoutCreateInfo set0_info = {
+    VkDescriptorSetLayoutCreateInfo const set0_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .pNext = nullptr,
         .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
@@ -209,7 +247,7 @@ ModelRenderer::ModelRenderer() {
                                 &_descriptor_set_layout);
 
     // pipeline layout
-    VkPipelineLayoutCreateInfo pipeline_layout_info = {
+    VkPipelineLayoutCreateInfo const pipeline_layout_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
@@ -260,7 +298,7 @@ ModelRenderer::ModelRenderer() {
     _fragment_shader.shader = shader_exts[1];
   }
   {
-    VkCommandBufferAllocateInfo command_buffer_allocate_info = {
+    VkCommandBufferAllocateInfo const command_buffer_allocate_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .pNext = nullptr,
         .commandPool = driver->GetCommandPool(),
@@ -276,7 +314,7 @@ ModelRenderer::ModelRenderer() {
 void ModelRenderer::RecordCommandBuffer() {
   // begin record command buffer
 
-  VkCommandBufferBeginInfo begin_info = {
+  VkCommandBufferBeginInfo const begin_info = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .pNext = nullptr,
   };
@@ -284,7 +322,7 @@ void ModelRenderer::RecordCommandBuffer() {
                  "Failed to begin command buffer");
 
   auto *driver = VulkanDriver::GetSingleton();
-  uint32_t index = driver->GetCurrentSwapchainImageIndex();
+  uint32_t const index = driver->GetCurrentSwapchainImageIndex();
   {
     const auto &images = driver->GetSwapchainImages();
     driver->HTransitionImageLayout(
@@ -306,7 +344,7 @@ void ModelRenderer::RecordCommandBuffer() {
     att_info.resolveMode = VK_RESOLVE_MODE_NONE;
 
     // render_info
-    VkRenderingInfo render_info = {
+    VkRenderingInfo const render_info = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
         .pNext = nullptr,
         .flags = 0,
@@ -328,21 +366,25 @@ void ModelRenderer::RecordCommandBuffer() {
   }
 
   {
+    SetVertexInput(_command_buffer);
     for (uint32_t i = 0; i < _render_layers.size(); ++i) {
-      BindLayerDescriptorSet(i);
+      BindLayerDrawCommand(i);
+      vkCmdDrawIndexed(_command_buffer, _render_layers[i]->GetIndexCount(), 1,
+                       0, 0, 0);
     }
   }
   {
     vkCmdEndRenderingKHR(_command_buffer);
   }
 }
-void ModelRenderer::BindLayerDescriptorSet(uint32_t index) const {
-  VkDescriptorImageInfo image_info = {
+
+void ModelRenderer::BindLayerDrawCommand(uint32_t index) const {
+  VkDescriptorImageInfo const image_info = {
       .sampler = _sampler,
-      .imageView = _render_layers[index]->_image_view,
+      .imageView = _render_layers[index]->GetImageView(),
       .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
   };
-  VkWriteDescriptorSet write_set = {
+  VkWriteDescriptorSet const write_set = {
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .pNext = nullptr,
       .dstSet = nullptr,
@@ -354,9 +396,16 @@ void ModelRenderer::BindLayerDescriptorSet(uint32_t index) const {
   };
   vkCmdPushDescriptorSetKHR(_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             _pipeline_layout, 0, 1, &write_set);
+
+  auto *vertex_buffer = _render_layers[index]->GetVertexBuffer();
+  auto *index_buffer = _render_layers[index]->GetIndexBuffer();
+  constexpr VkDeviceSize kOffset = 0;
+  vkCmdBindVertexBuffers(_command_buffer, 0, 1, &vertex_buffer, &kOffset);
+  vkCmdBindIndexBuffer(_command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
 }
 void ModelRenderer::AddLayer(Layer2dResource *layer) {}
 ModelRenderer::~ModelRenderer() {
+
   auto *driver = VulkanDriver::GetSingleton();
   _vertex_shader.Destroy(driver->GetDevice());
   _fragment_shader.Destroy(driver->GetDevice());
@@ -364,6 +413,7 @@ ModelRenderer::~ModelRenderer() {
 
   vkDestroyDescriptorSetLayout(driver->GetDevice(), _descriptor_set_layout,
                                nullptr);
+  vkDestroyPipelineLayout(driver->GetDevice(), _pipeline_layout, nullptr);
   vkDestroySampler(driver->GetDevice(), _layer_sampler, nullptr);
 }
 void ModelRenderer::Render() {}

@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <iostream>
 #include <set>
-
+#include <cstring>
 #include "vulkan/vulkan_core.h"
 
 namespace {

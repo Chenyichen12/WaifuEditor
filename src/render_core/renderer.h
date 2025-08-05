@@ -18,7 +18,7 @@ struct ModelVertex {
 };
 
 class Layer2dResource : public IRenderResource, public NoCopyable {
-  friend class ModelRenderer;
+  // friend class ModelRenderer;
   bool _dirty = false;
 
   VkImage _image = VK_NULL_HANDLE;
@@ -45,6 +45,11 @@ class Layer2dResource : public IRenderResource, public NoCopyable {
   };
   static std::unique_ptr<Layer2dResource> CreateFromImage(
       const ImageConfig &config);
+  VkBuffer GetVertexBuffer() const { return _vertex_buffer._buffer; }
+  VkBuffer GetIndexBuffer() const { return _index_buffer._buffer; }
+  VkImage GetImage() const { return _image; }
+  VkImageView GetImageView() const { return _image_view; }
+  uint32_t GetIndexCount() const { return _indices.size(); }
 
   ~Layer2dResource() override;
 };
@@ -70,7 +75,7 @@ class ModelRenderer {
   VkCommandBuffer _command_buffer = VK_NULL_HANDLE;
   void RecordCommandBuffer();
   // cmd
-  void BindLayerDescriptorSet(uint32_t index) const;
+  void BindLayerDrawCommand(uint32_t index) const;
 
  public:
   ModelRenderer();
