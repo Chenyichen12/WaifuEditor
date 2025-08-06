@@ -307,19 +307,34 @@ ModelRenderer::ModelRenderer() {
     };
     AssertVkResult(vkAllocateCommandBuffers(
         driver->GetDevice(), &command_buffer_allocate_info, &_command_buffer));
-    // RecordCommandBuffer();
+  }
+  // fence
+  {
+    VkFenceCreateInfo constexpr fence_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
+    VkSemaphoreCreateInfo constexpr semaphore_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+    };
+    // AssertVkResult(vkCreateFence(driver->GetDevice(), &fence_info, nullptr,
+    //                              &_render_finished_fence),
+    // "Failed to create render finished fence");
+    AssertVkResult(
+        vkCreateSemaphore(driver->GetDevice(), &semaphore_info, nullptr,
+                          &_swap_chain_image_available_semaphore),
+        "Failed to create image available fence");
+    AssertVkResult(vkCreateSemaphore(driver->GetDevice(), &semaphore_info,
+                                     nullptr, &_render_finished_semaphore),
+                   "Failed to create render finished semaphore");
   }
 }
 
 void ModelRenderer::RecordCommandBuffer() {
   // begin record command buffer
-
-  VkCommandBufferBeginInfo const begin_info = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-      .pNext = nullptr,
-  };
-  AssertVkResult(vkBeginCommandBuffer(_command_buffer, &begin_info),
-                 "Failed to begin command buffer");
 
   auto *driver = VulkanDriver::GetSingleton();
   uint32_t const index = driver->GetCurrentSwapchainImageIndex();
@@ -367,34 +382,34 @@ void ModelRenderer::RecordCommandBuffer() {
     vkCmdSetStencilTestEnableEXT(_command_buffer, VK_FALSE);
     vkCmdSetDepthBiasEnableEXT(_command_buffer, VK_FALSE);
     vkCmdSetRasterizationSamplesEXT(_command_buffer, VK_SAMPLE_COUNT_1_BIT);
-    VkSampleMask mask = ~0u;
+    constexpr VkSampleMask mask = ~0u;
     vkCmdSetSampleMaskEXT(_command_buffer, VK_SAMPLE_COUNT_1_BIT, &mask);
     vkCmdSetAlphaToOneEnableEXT(_command_buffer, VK_FALSE);
     vkCmdSetAlphaToCoverageEnableEXT(_command_buffer, VK_FALSE);
 
     vkCmdSetPolygonModeEXT(_command_buffer, VK_POLYGON_MODE_FILL);
     vkCmdSetPrimitiveTopologyEXT(_command_buffer,
-                              VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+                                 VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     vkCmdSetPrimitiveRestartEnableEXT(_command_buffer, VK_FALSE);
 
-    VkBool32 blendEnable = VK_FALSE;
+    constexpr VkBool32 blend_enable = VK_FALSE;
     vkCmdSetColorBlendEnableEXT(_command_buffer, 0 /* firstAttachment */,
-                                1 /* count */, &blendEnable);
-    VkColorComponentFlags color_mask =
+                                1 /* count */, &blend_enable);
+    const VkColorComponentFlags color_mask =
         VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     vkCmdSetColorWriteMaskEXT(_command_buffer, 0 /* firstAttachment */,
                               1 /* count */, &color_mask);
 
-    VkViewport viewport = {static_cast<float>(_region.x),
-                           static_cast<float>(_region.y),
-                           static_cast<float>(_region.width),
-                           static_cast<float>(_region.height),
-                           0.0f,
-                           1.0f};
+    const VkViewport viewport = {static_cast<float>(_region.x),
+                                 static_cast<float>(_region.y),
+                                 static_cast<float>(_region.width),
+                                 static_cast<float>(_region.height),
+                                 0.0f,
+                                 1.0f};
     vkCmdSetViewportWithCountEXT(_command_buffer, 1, &viewport);
-    VkRect2D scissor = {
+    const VkRect2D scissor = {
         .offset = {_region.x, _region.y},
         .extent = {_region.width, _region.height},
     };
@@ -420,8 +435,15 @@ void ModelRenderer::RecordCommandBuffer() {
   {
     vkCmdEndRenderingKHR(_command_buffer);
   }
-
-  vkEndCommandBuffer(_command_buffer);
+  {
+    const auto &images = driver->GetSwapchainImages();
+    driver->HTransitionImageLayout(
+        _command_buffer, images[index], VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+  }
 }
 
 void ModelRenderer::BindLayerDrawCommand(uint32_t index) const {
@@ -445,8 +467,8 @@ void ModelRenderer::BindLayerDrawCommand(uint32_t index) const {
 
   auto *vertex_buffer = _render_layers[index]->GetVertexBuffer();
   auto *index_buffer = _render_layers[index]->GetIndexBuffer();
-  constexpr VkDeviceSize kOffset = 0;
-  vkCmdBindVertexBuffers(_command_buffer, 0, 1, &vertex_buffer, &kOffset);
+  constexpr VkDeviceSize offset = 0;
+  vkCmdBindVertexBuffers(_command_buffer, 0, 1, &vertex_buffer, &offset);
   vkCmdBindIndexBuffer(_command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
 }
 void ModelRenderer::AddLayer(Layer2dResource *layer) {
@@ -472,11 +494,49 @@ void ModelRenderer::SetRegion(const int pos_x, const int pos_y,
 }
 void ModelRenderer::Render() {
   auto *driver = VulkanDriver::GetSingleton();
-  vkDeviceWaitIdle(driver->GetDevice());
-  // reset command buffer
-  vkResetCommandBuffer(_command_buffer,
-                       VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+  vkQueueWaitIdle(driver->GetGraphicsQueue());
+  VkCommandBufferBeginInfo const begin_info = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .pNext = nullptr,
+  };
+  AssertVkResult(vkBeginCommandBuffer(_command_buffer, &begin_info),
+                 "Failed to begin command buffer");
+  driver->AcquireNextSwapchainImage(
+      _command_buffer, _swap_chain_image_available_semaphore, VK_NULL_HANDLE);
   RecordCommandBuffer();
+
+  vkEndCommandBuffer(_command_buffer);
+
+  VkPipelineStageFlags const pipeline_stages[] = {
+      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+  };
+  VkSubmitInfo const submit_info = {
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+      .pNext = nullptr,
+      .waitSemaphoreCount = 1,
+      .pWaitSemaphores = &_swap_chain_image_available_semaphore,
+      .pWaitDstStageMask = pipeline_stages,
+      .commandBufferCount = 1,
+      .pCommandBuffers = &_command_buffer,
+      .signalSemaphoreCount = 1,
+      .pSignalSemaphores = &_render_finished_semaphore,
+  };
+
+  vkQueueSubmit(driver->GetGraphicsQueue(), 1, &submit_info, VK_NULL_HANDLE);
+  uint32_t const image_index = driver->GetCurrentSwapchainImageIndex();
+  VkPresentInfoKHR const present_info = {
+      .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+      .pNext = nullptr,
+      .waitSemaphoreCount = 1,
+      .pWaitSemaphores = &_render_finished_semaphore,
+      .swapchainCount = 1,
+      .pSwapchains = &driver->GetSwapchain(),
+      .pImageIndices = &image_index,
+      .pResults = nullptr,
+  };
+  vkQueuePresentKHR(driver->GetPresentQueue(), &present_info);
+
+  // reset fence
 }
 
 }  // namespace rdc

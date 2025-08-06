@@ -51,7 +51,7 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
   AssertVkResult(volkInitialize());
 
   {
-    VkApplicationInfo app_info = {
+    VkApplicationInfo const app_info = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pNext = nullptr,
         .pApplicationName = "waifu_studio_rdc",
@@ -77,7 +77,7 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
 
     auto exts = config.instance_extensions;
     AddContainer(exts, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    VkInstanceCreateInfo instance_info = {
+    VkInstanceCreateInfo const instance_info = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pNext = &debug_info,
         .pApplicationInfo = &app_info,
@@ -166,15 +166,15 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
     }
 
     // create device
-    std::set<uint32_t> unique_queue_families = {
+    std::set<uint32_t> const unique_queue_families = {
         graphics_queue_family_index,
         present_queue_family_index,
     };
 
     std::vector<VkDeviceQueueCreateInfo> queue_infos;
-    float queue_priority = 1.0f;
+    float constexpr queue_priority = 1.0f;
     for (const auto &family_index : unique_queue_families) {
-      VkDeviceQueueCreateInfo queue_info = {
+      VkDeviceQueueCreateInfo const queue_info = {
           .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
           .pNext = nullptr,
           .flags = 0,
@@ -214,7 +214,7 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
     shader_object_features.shaderObject = VK_TRUE;
     shader_object_features.pNext = &dynamic_rendering_features;
 
-    VkDeviceCreateInfo device_info = {
+    VkDeviceCreateInfo const device_info = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         // .pNext = &dynamic_rendering_features,
         .pNext = &shader_object_features,
@@ -338,7 +338,7 @@ void VulkanDriver::CreateSwapchain(const VkExtent2D &extent) {
       "Failed to get swapchain images");
 
   for (size_t i = 0; i < _swapchain_packet.images.size(); ++i) {
-    VkImageViewCreateInfo image_view_info = {
+    VkImageViewCreateInfo const image_view_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
@@ -368,7 +368,7 @@ void VulkanDriver::CreateSwapchain(const VkExtent2D &extent) {
 }
 
 VkSampler VulkanDriver::HCreateSimpleSampler() const {
-  VkSamplerCreateInfo sampler_info = {
+  VkSamplerCreateInfo const sampler_info = {
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
@@ -393,7 +393,7 @@ VkSampler VulkanDriver::HCreateSimpleSampler() const {
   return sampler;
 }
 VkCommandBuffer VulkanDriver::HBeginOneTimeCommandBuffer() const {
-  VkCommandBufferAllocateInfo alloc_info = {
+  VkCommandBufferAllocateInfo const alloc_info = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .pNext = nullptr,
       .commandPool = _command_pool,
@@ -404,7 +404,7 @@ VkCommandBuffer VulkanDriver::HBeginOneTimeCommandBuffer() const {
   AssertVkResult(
       vkAllocateCommandBuffers(_device, &alloc_info, &command_buffer),
       "Failed to allocate command buffer");
-  VkCommandBufferBeginInfo begin_info = {
+  VkCommandBufferBeginInfo const begin_info = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .pNext = nullptr,
       .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
@@ -448,7 +448,7 @@ void VulkanDriver::HTransitionImageLayout(
     const VkPipelineStageFlags dst_stage, const VkImageLayout old_layout,
     const VkImageLayout new_layout,
     const VkImageSubresourceRange &range) const {
-  VkImageMemoryBarrier barrier = {
+  VkImageMemoryBarrier const barrier = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
       .pNext = nullptr,
       .srcAccessMask = src,
@@ -469,10 +469,10 @@ void VulkanDriver::HCreateBuffer(const uint32_t size,
                                  const VmaMemoryUsage vma_flags,
                                  VkBuffer &buffer,
                                  VmaAllocation &allocation) const {
-  VmaAllocationCreateInfo alloc_info = {
+  VmaAllocationCreateInfo const alloc_info = {
       .usage = vma_flags,
   };
-  VkBufferCreateInfo buffer_info = {
+  VkBufferCreateInfo const buffer_info = {
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,

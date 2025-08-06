@@ -73,12 +73,15 @@ class ModelRenderer {
   Shader _fragment_shader;
 
   VkCommandBuffer _command_buffer = VK_NULL_HANDLE;
+  VkSemaphore _render_finished_semaphore = VK_NULL_HANDLE;
+  VkSemaphore _swap_chain_image_available_semaphore = VK_NULL_HANDLE;
+
   struct Region {
     int x;
     int y;
     uint32_t width;
     uint32_t height;
-  } _region = {0, 0, 800, 600};
+  } _region = {.x=0, .y=0, .width=800, .height=600};
 
   void RecordCommandBuffer();
   // cmd

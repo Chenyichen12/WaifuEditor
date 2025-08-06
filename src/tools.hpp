@@ -10,7 +10,7 @@ void SafeCall(Object *obj, Func &&func, Args &&...args) {
   if (obj) {                                   // 检查对象指针是否为空
     (obj->*func)(std::forward<Args>(args)...); // 调用成员函数
   } else {
-    std::cerr << "Object pointer is null, function call skipped." << std::endl;
+    return;
   }
 }
 
