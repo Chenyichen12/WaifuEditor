@@ -21,6 +21,13 @@ class AppWindow {
     }
     return VK_SUCCESS;
   }
+  // handle the windows resize
+  static void WindowResizeCallback(GLFWwindow *window, int, int) {
+    auto *driver = rdc::VulkanDriver::GetSingleton();
+    if (driver) {
+      driver->MarkSwapchainInvalid();
+    }
+  }
 
  public:
   AppWindow() {
@@ -35,6 +42,9 @@ class AppWindow {
       std::cerr << "fail to create window\n";
       std::abort();
     }
+
+    // set resize callback
+    glfwSetWindowSizeCallback(_window, WindowResizeCallback);
 
     rdc::VulkanDriverConfig config;
     config.initial_height = 600;
@@ -113,14 +123,26 @@ class AppWindow {
         auto *res = _resource_manager->AddResource(std::move(layer_resource));
         _renderer->AddLayer(res);
       }
-      uint32_t canvas_width = layer_config["canvas"]["width"].get<uint32_t>();
-      uint32_t canvas_height = layer_config["canvas"]["height"].get<uint32_t>();
+      const uint32_t canvas_width =
+          layer_config["canvas"]["width"].get<uint32_t>();
+      const uint32_t canvas_height =
+          layer_config["canvas"]["height"].get<uint32_t>();
       _renderer->SetCanvasSize(canvas_width, canvas_height);
     }
   }
   void Run() {
     while (!glfwWindowShouldClose(_window)) {
       glfwPollEvents();
+      auto *driver = rdc::VulkanDriver::GetSingleton();
+      if (!driver->IsSwapchainValid()) {
+        int width;
+        int height;
+        glfwGetFramebufferSize(_window, &width, &height);
+        if (width <= 0 || height <= 0) {
+          continue;  // Skip rendering if the window size is invalid
+        }
+        driver->RecreateSwapchain({static_cast<uint32_t>(width), static_cast<uint32_t>(height)});
+      }
       _renderer->Render();
     }
   }

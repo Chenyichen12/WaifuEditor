@@ -35,6 +35,7 @@ class VulkanDriver {
     VkQueue present_queue = VK_NULL_HANDLE;
   } _queue_packet;
   VkDevice _device = VK_NULL_HANDLE;
+  VkPhysicalDevice _physical_device = VK_NULL_HANDLE;
   VkSurfaceKHR _surface = VK_NULL_HANDLE;
   VmaAllocator _vma_allocator = VK_NULL_HANDLE;
   class SwapchainPacket {
@@ -45,6 +46,7 @@ class VulkanDriver {
     std::vector<VkImage> images;
     std::vector<VkImageView> image_views;
     uint32_t current_image_index = 0;
+    bool is_valid = true;
 
     VkPresentModeKHR ChoosePresentMode() const;
     VkSurfaceFormatKHR ChooseSurfaceFormat() const;
@@ -89,11 +91,17 @@ class VulkanDriver {
   }
   int AcquireNextSwapchainImage(const VkSemaphore &semaphore,
                                 const VkFence &fence) {
-    vkAcquireNextImageKHR(_device, _swapchain_packet.swapchain, UINT64_MAX,
-                          semaphore, fence,
-                          &_swapchain_packet.current_image_index);
+    const auto result = vkAcquireNextImageKHR(_device, _swapchain_packet.swapchain,
+                                        UINT64_MAX, semaphore, fence,
+                                        &_swapchain_packet.current_image_index);
+    if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR) {
+      _swapchain_packet.is_valid = false;
+    }
     return static_cast<int>(_swapchain_packet.current_image_index);
   }
+  bool IsSwapchainValid() const { return _swapchain_packet.is_valid; }
+  void MarkSwapchainInvalid() { _swapchain_packet.is_valid = false; }
+  void RecreateSwapchain(const VkExtent2D &extent);
 
   const VkQueue &GetGraphicsQueue() const {
     return _queue_packet.graphics_queue;

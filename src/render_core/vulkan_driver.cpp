@@ -131,6 +131,7 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
       std::cerr << "No suitable physical device found\n";
       std::abort();
     }
+    _physical_device = selected_device;
 
     // select queue
     uint32_t queue_family_count = 0;
@@ -240,26 +241,25 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
               << graphics_queue_family_index
               << ", present queue family index: " << present_queue_family_index
               << "\n";
-
-    // swapchain details
-    _swapchain_packet.QuerySwapchainSupport(selected_device, _surface);
-    {
-      VmaVulkanFunctions vulkan_functions = {};
-      vulkan_functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
-      vulkan_functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
-      // vma
-      VmaAllocatorCreateInfo vma_allocator_info = {
-          .physicalDevice = selected_device,
-          .device = _device,
-          .instance = _instance,
-          .vulkanApiVersion = VK_API_VERSION_1_1,
-      };
-      vma_allocator_info.pVulkanFunctions = &vulkan_functions;
-
-      AssertVkResult(vmaCreateAllocator(&vma_allocator_info, &_vma_allocator),
-                     "Failed to create VMA allocator");
-    }
   }
+
+  {
+    VmaVulkanFunctions vulkan_functions = {};
+    vulkan_functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    vulkan_functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+    // vma
+    VmaAllocatorCreateInfo vma_allocator_info = {
+        .physicalDevice = _physical_device,
+        .device = _device,
+        .instance = _instance,
+        .vulkanApiVersion = VK_API_VERSION_1_1,
+    };
+    vma_allocator_info.pVulkanFunctions = &vulkan_functions;
+
+    AssertVkResult(vmaCreateAllocator(&vma_allocator_info, &_vma_allocator),
+                   "Failed to create VMA allocator");
+  }
+
   {
     CreateSwapchain({config.initial_width, config.initial_height});
   }
@@ -278,6 +278,7 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
   }
 }
 void VulkanDriver::CreateSwapchain(const VkExtent2D &extent) {
+  _swapchain_packet.QuerySwapchainSupport(_physical_device, _surface);
   auto surface_format = _swapchain_packet.ChooseSurfaceFormat();
   auto present_mode = _swapchain_packet.ChoosePresentMode();
   auto swapchain_extent =
@@ -367,6 +368,14 @@ void VulkanDriver::CreateSwapchain(const VkExtent2D &extent) {
   }
 }
 
+void VulkanDriver::RecreateSwapchain(const VkExtent2D &extent) {
+  if (_swapchain_packet.is_valid) {
+    return;
+  }
+  vkDeviceWaitIdle(_device);
+  CreateSwapchain(extent);
+  _swapchain_packet.is_valid = true;
+}
 VkSampler VulkanDriver::HCreateSimpleSampler() const {
   VkSamplerCreateInfo const sampler_info = {
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,

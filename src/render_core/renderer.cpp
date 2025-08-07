@@ -607,9 +607,11 @@ void ModelRenderer::Render() {
       .pImageIndices = &image_index,
       .pResults = nullptr,
   };
-  vkQueuePresentKHR(driver->GetPresentQueue(), &present_info);
 
-  // reset fence
+  auto result = vkQueuePresentKHR(driver->GetPresentQueue(), &present_info);
+  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+    driver->MarkSwapchainInvalid();
+  }
 }
 
 }  // namespace rdc
