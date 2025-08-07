@@ -547,7 +547,6 @@ ModelRenderer::~ModelRenderer() {
   vkDestroyDescriptorSetLayout(driver->GetDevice(), _descriptor_set_layout,
                                nullptr);
   vkDestroyPipelineLayout(driver->GetDevice(), _pipeline_layout, nullptr);
-  vkDestroySampler(driver->GetDevice(), _layer_sampler, nullptr);
 }
 
 void ModelRenderer::SetRegion(const int pos_x, const int pos_y,
@@ -568,9 +567,19 @@ void ModelRenderer::Render() {
   auto *driver = VulkanDriver::GetSingleton();
   vkQueueWaitIdle(driver->GetGraphicsQueue());
 
-  driver->AcquireNextSwapchainImage(_swap_chain_image_available_semaphore,
-                                    VK_NULL_HANDLE);
-  VkCommandBufferBeginInfo const begin_info = {
+  uint32_t index = 0;
+  const auto acquire_result = driver->AcquireSwapchainNextImage(
+      _swap_chain_image_available_semaphore, VK_NULL_HANDLE, index);
+  if (acquire_result != VK_SUCCESS) {
+    if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR ||
+        acquire_result == VK_SUBOPTIMAL_KHR) {
+      driver->MarkSwapchainInvalid();
+      return;
+    }
+    AssertVkResult(acquire_result, "Failed to acquire swapchain image");
+  }
+
+  constexpr VkCommandBufferBeginInfo begin_info = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .pNext = nullptr,
   };
@@ -611,6 +620,8 @@ void ModelRenderer::Render() {
   auto result = vkQueuePresentKHR(driver->GetPresentQueue(), &present_info);
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
     driver->MarkSwapchainInvalid();
+  } else if (result != VK_SUCCESS) {
+    AssertVkResult(result, "Failed to present swapchain image");
   }
 }
 

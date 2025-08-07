@@ -55,7 +55,8 @@ class Layer2dResource : public IRenderResource, public NoCopyable {
 };
 
 class ModelRenderer {
-  VkSampler _layer_sampler = VK_NULL_HANDLE;
+
+  // render resources use to render layer
   std::vector<Layer2dResource *> _render_layers;
   VkDescriptorSetLayout _descriptor_set_layout = VK_NULL_HANDLE;
   VkPipelineLayout _pipeline_layout = VK_NULL_HANDLE;
@@ -71,6 +72,13 @@ class ModelRenderer {
   };
   Shader _vertex_shader;
   Shader _fragment_shader;
+  struct {
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    void Destroy(const VmaAllocator &allocator) {
+      vmaDestroyBuffer(allocator, buffer, allocation);
+    }
+  } _ubo_buffer;
 
   VkCommandBuffer _command_buffer = VK_NULL_HANDLE;
   VkSemaphore _render_finished_semaphore = VK_NULL_HANDLE;
@@ -85,13 +93,6 @@ class ModelRenderer {
 
   float _canvas_scale = 1.0f;
   glm::vec2 _canvas_offset = glm::vec2(0.0f);
-  struct {
-    VkBuffer buffer = VK_NULL_HANDLE;
-    VmaAllocation allocation = VK_NULL_HANDLE;
-    void Destroy(const VmaAllocator &allocator) {
-      vmaDestroyBuffer(allocator, buffer, allocation);
-    }
-  } _ubo_buffer;
 
   uint32_t _canvas_width = 800;
   uint32_t _canvas_height = 600;
@@ -112,5 +113,17 @@ class ModelRenderer {
 
   void Render();
 };
+
+
+class ApplicationRenderer {
+  int _window_width = 800;
+  int _window_height = 600;
+
+public:
+  void SetWindowSize(int width, int height);
+  void Render();
+};
+
+
 }  // namespace rdc
 #endif  // RENDER_CORE_RENDERER_H_

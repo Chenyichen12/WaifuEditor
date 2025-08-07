@@ -89,17 +89,18 @@ class VulkanDriver {
   uint32_t GetCurrentSwapchainImageIndex() const {
     return _swapchain_packet.current_image_index;
   }
-  int AcquireNextSwapchainImage(const VkSemaphore &semaphore,
-                                const VkFence &fence) {
-    const auto result = vkAcquireNextImageKHR(_device, _swapchain_packet.swapchain,
-                                        UINT64_MAX, semaphore, fence,
-                                        &_swapchain_packet.current_image_index);
-    if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR) {
-      _swapchain_packet.is_valid = false;
-    }
-    return static_cast<int>(_swapchain_packet.current_image_index);
-  }
+
   bool IsSwapchainValid() const { return _swapchain_packet.is_valid; }
+  VkResult AcquireSwapchainNextImage(const VkSemaphore &semaphore,
+                                     const VkFence &fence,
+                                     uint32_t &image_index) {
+    const auto result =
+        vkAcquireNextImageKHR(_device, _swapchain_packet.swapchain, UINT64_MAX,
+                              semaphore, fence, &image_index);
+    _swapchain_packet.current_image_index = image_index;
+    return result;
+  };
+
   void MarkSwapchainInvalid() { _swapchain_packet.is_valid = false; }
   void RecreateSwapchain(const VkExtent2D &extent);
 
