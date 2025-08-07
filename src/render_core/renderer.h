@@ -84,6 +84,7 @@ class ModelRenderer {
   } _region = {.x = 0, .y = 0, .width = 800, .height = 600};
 
   float _canvas_scale = 1.0f;
+  glm::vec2 _canvas_offset = glm::vec2(0.0f);
   struct {
     VkBuffer buffer = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
@@ -94,6 +95,7 @@ class ModelRenderer {
 
   uint32_t _canvas_width = 800;
   uint32_t _canvas_height = 600;
+  void AutoCenterCanvas();
 
   void UpdateUniform();
   void RecordCommandBuffer();

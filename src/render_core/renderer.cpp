@@ -333,6 +333,18 @@ ModelRenderer::ModelRenderer() {
   }
 }
 
+void ModelRenderer::AutoCenterCanvas() {
+  auto width_scale = static_cast<float>(_region.width) / _canvas_width;
+  auto height_scale = static_cast<float>(_region.height) / _canvas_height;
+  auto canvas_2_region_scale = std::min(width_scale, height_scale);
+  float canvas_x_offset =
+      (_region.width - _canvas_width * canvas_2_region_scale) / 2.0f;
+  float canvas_y_offset =
+      (_region.height - _canvas_height * canvas_2_region_scale) / 2.0f;
+  _canvas_scale = canvas_2_region_scale;
+  _canvas_offset.x = canvas_x_offset;
+  _canvas_offset.y = canvas_y_offset;
+}
 void ModelRenderer::UpdateUniform() {
   const auto driver = VulkanDriver::GetSingleton();
   void *data;
@@ -341,6 +353,7 @@ void ModelRenderer::UpdateUniform() {
   ubo.region_scale = _canvas_scale;
   ubo.screen_size = glm::vec2(static_cast<float>(_region.width),
                               static_cast<float>(_region.height));
+  ubo.region_offset = _canvas_offset;
   memcpy(data, &ubo, sizeof(ubo));
   vmaUnmapMemory(driver->GetVmaAllocator(), _ubo_buffer.allocation);
 }
@@ -367,7 +380,7 @@ void ModelRenderer::RecordCommandBuffer() {
     att_info.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     att_info.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     att_info.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    att_info.clearValue = {.color = {0.0f, 0.0f, 0.0f, 1.0f}};
+    att_info.clearValue = {.color = {0.8f, 0.8f, 0.8f, 1.0f}};
     att_info.resolveMode = VK_RESOLVE_MODE_NONE;
 
     // render_info
@@ -536,20 +549,19 @@ ModelRenderer::~ModelRenderer() {
   vkDestroyPipelineLayout(driver->GetDevice(), _pipeline_layout, nullptr);
   vkDestroySampler(driver->GetDevice(), _layer_sampler, nullptr);
 }
+
 void ModelRenderer::SetRegion(const int pos_x, const int pos_y,
                               const uint32_t width, const uint32_t height) {
   _region.x = pos_x;
   _region.y = pos_y;
   _region.width = width;
   _region.height = height;
+  AutoCenterCanvas();
 }
 void ModelRenderer::SetCanvasSize(const uint32_t width, const uint32_t height) {
   _canvas_width = width;
   _canvas_height = height;
-  const auto h_scale = static_cast<float>(_region.width) / width;
-  const auto v_scale = static_cast<float>(_region.height) / height;
-  const auto min_scale = std::min(h_scale, v_scale);
-  _canvas_scale = min_scale;
+  AutoCenterCanvas();
 }
 
 void ModelRenderer::Render() {

@@ -1,7 +1,7 @@
 layout(binding = 0, std140) uniform UniformBufferObject{
-    float region_scale;
     vec2 region_offset;
     vec2 screen_size;
+    float region_scale;
 } ubo; // v
 
 layout(binding = 1) uniform sampler2D main_tex; // f
