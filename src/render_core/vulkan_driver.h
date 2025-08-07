@@ -87,8 +87,7 @@ class VulkanDriver {
   uint32_t GetCurrentSwapchainImageIndex() const {
     return _swapchain_packet.current_image_index;
   }
-  int AcquireNextSwapchainImage(const VkCommandBuffer &,
-                                const VkSemaphore &semaphore,
+  int AcquireNextSwapchainImage(const VkSemaphore &semaphore,
                                 const VkFence &fence) {
     vkAcquireNextImageKHR(_device, _swapchain_packet.swapchain, UINT64_MAX,
                           semaphore, fence,

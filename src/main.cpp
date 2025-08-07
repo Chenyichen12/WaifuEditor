@@ -110,11 +110,12 @@ class AppWindow {
           std::cerr << "Failed to create layer resource from image\n";
           continue;
         }
-        auto* res = _resource_manager->AddResource(std::move(layer_resource));
+        auto *res = _resource_manager->AddResource(std::move(layer_resource));
         _renderer->AddLayer(res);
-
-        std::cout << position_array[0] << " " << uv_array[0] << "\n";
       }
+      uint32_t canvas_width = layer_config["canvas"]["width"].get<uint32_t>();
+      uint32_t canvas_height = layer_config["canvas"]["height"].get<uint32_t>();
+      _renderer->SetCanvasSize(canvas_width, canvas_height);
     }
   }
   void Run() {
@@ -124,8 +125,8 @@ class AppWindow {
     }
   }
   ~AppWindow() {
-    delete _resource_manager;
     delete _renderer;
+    delete _resource_manager;
     rdc::VulkanDriver::CleanupSingleton();
 
     glfwDestroyWindow(_window);

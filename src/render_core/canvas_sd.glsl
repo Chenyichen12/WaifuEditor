@@ -1,5 +1,7 @@
 layout(binding = 0, std140) uniform UniformBufferObject{
-    mat3 transform;
+    float region_scale;
+    vec2 region_offset;
+    vec2 screen_size;
 } ubo; // v
 
 layout(binding = 1) uniform sampler2D main_tex; // f
@@ -11,8 +13,9 @@ layout(location = 1) in vec2 in_uv;
 layout(location = 0) out vec2 out_uv;
 
 void main(){
-//    vec3 pos = ubo.transform * vec3(in_pos, 1.0);
-    vec3 pos = vec3(in_pos, 1.0);
+    vec2 pos = in_pos * ubo.region_scale + ubo.region_offset;
+    pos.x = pos.x * 2.0 / ubo.screen_size.x - 1.0;
+    pos.y = pos.y * 2.0 / ubo.screen_size.y - 1.0;
     gl_Position = vec4(pos.xy, 0.0, 1.0);
     out_uv = in_uv;
 }

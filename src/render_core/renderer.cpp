@@ -262,6 +262,14 @@ ModelRenderer::ModelRenderer() {
         "Failed to create pipeline layout");
   }
   {
+    VkDeviceSize size = sizeof(shader_gen::canvas_sd::UniformBufferObject);
+    driver->HCreateBuffer(
+        size,
+        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VMA_MEMORY_USAGE_CPU_TO_GPU, _ubo_buffer.buffer,
+        _ubo_buffer.allocation);
+  }
+  {
     // shader objects
     _vertex_shader.stage_flag = VK_SHADER_STAGE_VERTEX_BIT;
     _fragment_shader.stage_flag = VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -310,19 +318,11 @@ ModelRenderer::ModelRenderer() {
   }
   // fence
   {
-    VkFenceCreateInfo constexpr fence_info = {
-        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
-    };
     VkSemaphoreCreateInfo constexpr semaphore_info = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
     };
-    // AssertVkResult(vkCreateFence(driver->GetDevice(), &fence_info, nullptr,
-    //                              &_render_finished_fence),
-    // "Failed to create render finished fence");
     AssertVkResult(
         vkCreateSemaphore(driver->GetDevice(), &semaphore_info, nullptr,
                           &_swap_chain_image_available_semaphore),
@@ -333,8 +333,20 @@ ModelRenderer::ModelRenderer() {
   }
 }
 
+void ModelRenderer::UpdateUniform() {
+  const auto driver = VulkanDriver::GetSingleton();
+  void *data;
+  vmaMapMemory(driver->GetVmaAllocator(), _ubo_buffer.allocation, &data);
+  shader_gen::canvas_sd::UniformBufferObject ubo = {};
+  ubo.region_scale = _canvas_scale;
+  ubo.screen_size = glm::vec2(static_cast<float>(_region.width),
+                              static_cast<float>(_region.height));
+  memcpy(data, &ubo, sizeof(ubo));
+  vmaUnmapMemory(driver->GetVmaAllocator(), _ubo_buffer.allocation);
+}
 void ModelRenderer::RecordCommandBuffer() {
   // begin record command buffer
+  UpdateUniform();
 
   auto *driver = VulkanDriver::GetSingleton();
   uint32_t const index = driver->GetCurrentSwapchainImageIndex();
@@ -392,9 +404,22 @@ void ModelRenderer::RecordCommandBuffer() {
                                  VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     vkCmdSetPrimitiveRestartEnableEXT(_command_buffer, VK_FALSE);
 
-    constexpr VkBool32 blend_enable = VK_FALSE;
+    constexpr VkBool32 blend_enable = VK_TRUE;
     vkCmdSetColorBlendEnableEXT(_command_buffer, 0 /* firstAttachment */,
                                 1 /* count */, &blend_enable);
+    VkColorBlendEquationEXT constexpr blend_equation = {
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp = VK_BLEND_OP_ADD,
+    };
+    vkCmdSetColorBlendEquationEXT(_command_buffer, 0 /* firstAttachment */,
+                                  1 /* count */, &blend_equation);
+    // blend
+    VkPipelineColorBlendAttachmentState color_blend_attachment = {};
+
     const VkColorComponentFlags color_mask =
         VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -452,6 +477,7 @@ void ModelRenderer::BindLayerDrawCommand(uint32_t index) const {
       .imageView = _render_layers[index]->GetImageView(),
       .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
   };
+
   VkWriteDescriptorSet const write_set = {
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .pNext = nullptr,
@@ -462,8 +488,25 @@ void ModelRenderer::BindLayerDrawCommand(uint32_t index) const {
       .descriptorType = shader_gen::canvas_sd::main_tex.desc_type,
       .pImageInfo = &image_info,
   };
+
+  VkDescriptorBufferInfo const buffer_info = {
+      .buffer = _ubo_buffer.buffer, .offset = 0, .range = VK_WHOLE_SIZE};
+  VkWriteDescriptorSet const ubo_write_set = {
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .pNext = nullptr,
+      .dstSet = nullptr,
+      .dstBinding = shader_gen::canvas_sd::ubo.binding,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = shader_gen::canvas_sd::ubo.desc_type,
+      .pBufferInfo = &buffer_info,
+  };
+
+  auto write_sets =
+      std::array<VkWriteDescriptorSet, 2>{ubo_write_set, write_set};
   vkCmdPushDescriptorSetKHR(_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            _pipeline_layout, 0, 1, &write_set);
+                            _pipeline_layout, 0, write_sets.size(),
+                            write_sets.data());
 
   auto *vertex_buffer = _render_layers[index]->GetVertexBuffer();
   auto *index_buffer = _render_layers[index]->GetIndexBuffer();
@@ -476,8 +519,16 @@ void ModelRenderer::AddLayer(Layer2dResource *layer) {
 }
 ModelRenderer::~ModelRenderer() {
   auto *driver = VulkanDriver::GetSingleton();
+  vkDeviceWaitIdle(driver->GetDevice());
   _vertex_shader.Destroy(driver->GetDevice());
   _fragment_shader.Destroy(driver->GetDevice());
+  vkDestroySemaphore(driver->GetDevice(), _render_finished_semaphore, nullptr);
+  vkDestroySemaphore(driver->GetDevice(), _swap_chain_image_available_semaphore,
+                     nullptr);
+
+  vkFreeCommandBuffers(driver->GetDevice(), driver->GetCommandPool(), 1,
+                       &_command_buffer);
+  _ubo_buffer.Destroy(driver->GetVmaAllocator());
   vkDestroySampler(driver->GetDevice(), _sampler, nullptr);
 
   vkDestroyDescriptorSetLayout(driver->GetDevice(), _descriptor_set_layout,
@@ -492,17 +543,27 @@ void ModelRenderer::SetRegion(const int pos_x, const int pos_y,
   _region.width = width;
   _region.height = height;
 }
+void ModelRenderer::SetCanvasSize(const uint32_t width, const uint32_t height) {
+  _canvas_width = width;
+  _canvas_height = height;
+  const auto h_scale = static_cast<float>(_region.width) / width;
+  const auto v_scale = static_cast<float>(_region.height) / height;
+  const auto min_scale = std::min(h_scale, v_scale);
+  _canvas_scale = min_scale;
+}
+
 void ModelRenderer::Render() {
   auto *driver = VulkanDriver::GetSingleton();
   vkQueueWaitIdle(driver->GetGraphicsQueue());
+
+  driver->AcquireNextSwapchainImage(_swap_chain_image_available_semaphore,
+                                    VK_NULL_HANDLE);
   VkCommandBufferBeginInfo const begin_info = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .pNext = nullptr,
   };
   AssertVkResult(vkBeginCommandBuffer(_command_buffer, &begin_info),
                  "Failed to begin command buffer");
-  driver->AcquireNextSwapchainImage(
-      _command_buffer, _swap_chain_image_available_semaphore, VK_NULL_HANDLE);
   RecordCommandBuffer();
 
   vkEndCommandBuffer(_command_buffer);

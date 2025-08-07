@@ -81,8 +81,21 @@ class ModelRenderer {
     int y;
     uint32_t width;
     uint32_t height;
-  } _region = {.x=0, .y=0, .width=800, .height=600};
+  } _region = {.x = 0, .y = 0, .width = 800, .height = 600};
 
+  float _canvas_scale = 1.0f;
+  struct {
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    void Destroy(const VmaAllocator &allocator) {
+      vmaDestroyBuffer(allocator, buffer, allocation);
+    }
+  } _ubo_buffer;
+
+  uint32_t _canvas_width = 800;
+  uint32_t _canvas_height = 600;
+
+  void UpdateUniform();
   void RecordCommandBuffer();
   // cmd
   void BindLayerDrawCommand(uint32_t index) const;
@@ -93,6 +106,7 @@ class ModelRenderer {
   std::span<Layer2dResource *> GetLayers() { return _render_layers; }
   ~ModelRenderer();
   void SetRegion(int pos_x, int pos_y, uint32_t width, uint32_t height);
+  void SetCanvasSize(uint32_t width, uint32_t height);
 
   void Render();
 };
