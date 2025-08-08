@@ -305,32 +305,6 @@ ModelRenderer::ModelRenderer() {
     _vertex_shader.shader = shader_exts[0];
     _fragment_shader.shader = shader_exts[1];
   }
-  {
-    VkCommandBufferAllocateInfo const command_buffer_allocate_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .pNext = nullptr,
-        .commandPool = driver->GetCommandPool(),
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1,
-    };
-    AssertVkResult(vkAllocateCommandBuffers(
-        driver->GetDevice(), &command_buffer_allocate_info, &_command_buffer));
-  }
-  // fence
-  {
-    VkSemaphoreCreateInfo constexpr semaphore_info = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-    };
-    AssertVkResult(
-        vkCreateSemaphore(driver->GetDevice(), &semaphore_info, nullptr,
-                          &_swap_chain_image_available_semaphore),
-        "Failed to create image available fence");
-    AssertVkResult(vkCreateSemaphore(driver->GetDevice(), &semaphore_info,
-                                     nullptr, &_render_finished_semaphore),
-                   "Failed to create render finished semaphore");
-  }
 }
 
 void ModelRenderer::AutoCenterCanvas() {
@@ -357,26 +331,14 @@ void ModelRenderer::UpdateUniform() {
   memcpy(data, &ubo, sizeof(ubo));
   vmaUnmapMemory(driver->GetVmaAllocator(), _ubo_buffer.allocation);
 }
-void ModelRenderer::RecordCommandBuffer() {
+void ModelRenderer::RecordCommandBuffer(VkCommandBuffer command_buffer) {
   // begin record command buffer
   UpdateUniform();
-
-  auto *driver = VulkanDriver::GetSingleton();
-  uint32_t const index = driver->GetCurrentSwapchainImageIndex();
-  {
-    const auto &images = driver->GetSwapchainImages();
-    driver->HTransitionImageLayout(
-        _command_buffer, images[index], 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-  }
-
+  auto driver = VulkanDriver::GetSingleton();
   {
     VkRenderingAttachmentInfo att_info = {};
-    const auto &views = driver->GetSwapchainImageViews();
     att_info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    att_info.imageView = views[index];
+    att_info.imageView = _render_target_view;
     att_info.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     att_info.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     att_info.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -397,28 +359,28 @@ void ModelRenderer::RecordCommandBuffer() {
         .colorAttachmentCount = 1,
         .pColorAttachments = &att_info,
     };
-    vkCmdBeginRenderingKHR(_command_buffer, &render_info);
+    vkCmdBeginRenderingKHR(command_buffer, &render_info);
   }
   {
-    vkCmdSetCullModeEXT(_command_buffer, VK_CULL_MODE_NONE);
-    vkCmdSetDepthTestEnableEXT(_command_buffer, VK_FALSE);
-    vkCmdSetDepthWriteEnableEXT(_command_buffer, VK_FALSE);
-    vkCmdSetRasterizerDiscardEnableEXT(_command_buffer, VK_FALSE);
-    vkCmdSetStencilTestEnableEXT(_command_buffer, VK_FALSE);
-    vkCmdSetDepthBiasEnableEXT(_command_buffer, VK_FALSE);
-    vkCmdSetRasterizationSamplesEXT(_command_buffer, VK_SAMPLE_COUNT_1_BIT);
+    vkCmdSetCullModeEXT(command_buffer, VK_CULL_MODE_NONE);
+    vkCmdSetDepthTestEnableEXT(command_buffer, VK_FALSE);
+    vkCmdSetDepthWriteEnableEXT(command_buffer, VK_FALSE);
+    vkCmdSetRasterizerDiscardEnableEXT(command_buffer, VK_FALSE);
+    vkCmdSetStencilTestEnableEXT(command_buffer, VK_FALSE);
+    vkCmdSetDepthBiasEnableEXT(command_buffer, VK_FALSE);
+    vkCmdSetRasterizationSamplesEXT(command_buffer, VK_SAMPLE_COUNT_1_BIT);
     constexpr VkSampleMask mask = ~0u;
-    vkCmdSetSampleMaskEXT(_command_buffer, VK_SAMPLE_COUNT_1_BIT, &mask);
-    vkCmdSetAlphaToOneEnableEXT(_command_buffer, VK_FALSE);
-    vkCmdSetAlphaToCoverageEnableEXT(_command_buffer, VK_FALSE);
+    vkCmdSetSampleMaskEXT(command_buffer, VK_SAMPLE_COUNT_1_BIT, &mask);
+    vkCmdSetAlphaToOneEnableEXT(command_buffer, VK_FALSE);
+    vkCmdSetAlphaToCoverageEnableEXT(command_buffer, VK_FALSE);
 
-    vkCmdSetPolygonModeEXT(_command_buffer, VK_POLYGON_MODE_FILL);
-    vkCmdSetPrimitiveTopologyEXT(_command_buffer,
+    vkCmdSetPolygonModeEXT(command_buffer, VK_POLYGON_MODE_FILL);
+    vkCmdSetPrimitiveTopologyEXT(command_buffer,
                                  VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    vkCmdSetPrimitiveRestartEnableEXT(_command_buffer, VK_FALSE);
+    vkCmdSetPrimitiveRestartEnableEXT(command_buffer, VK_FALSE);
 
     constexpr VkBool32 blend_enable = VK_TRUE;
-    vkCmdSetColorBlendEnableEXT(_command_buffer, 0 /* firstAttachment */,
+    vkCmdSetColorBlendEnableEXT(command_buffer, 0 /* firstAttachment */,
                                 1 /* count */, &blend_enable);
     VkColorBlendEquationEXT constexpr blend_equation = {
         .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
@@ -428,7 +390,7 @@ void ModelRenderer::RecordCommandBuffer() {
         .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
         .alphaBlendOp = VK_BLEND_OP_ADD,
     };
-    vkCmdSetColorBlendEquationEXT(_command_buffer, 0 /* firstAttachment */,
+    vkCmdSetColorBlendEquationEXT(command_buffer, 0 /* firstAttachment */,
                                   1 /* count */, &blend_equation);
     // blend
     VkPipelineColorBlendAttachmentState color_blend_attachment = {};
@@ -437,7 +399,7 @@ void ModelRenderer::RecordCommandBuffer() {
         VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
-    vkCmdSetColorWriteMaskEXT(_command_buffer, 0 /* firstAttachment */,
+    vkCmdSetColorWriteMaskEXT(command_buffer, 0 /* firstAttachment */,
                               1 /* count */, &color_mask);
 
     const VkViewport viewport = {static_cast<float>(_region.x),
@@ -446,45 +408,37 @@ void ModelRenderer::RecordCommandBuffer() {
                                  static_cast<float>(_region.height),
                                  0.0f,
                                  1.0f};
-    vkCmdSetViewportWithCountEXT(_command_buffer, 1, &viewport);
+    vkCmdSetViewportWithCountEXT(command_buffer, 1, &viewport);
     const VkRect2D scissor = {
         .offset = {_region.x, _region.y},
         .extent = {_region.width, _region.height},
     };
 
-    vkCmdSetScissorWithCountEXT(_command_buffer, 1, &scissor);
+    vkCmdSetScissorWithCountEXT(command_buffer, 1, &scissor);
   }
 
   {
-    SetVertexInput(_command_buffer);
+    SetVertexInput(command_buffer);
     auto shader_stages = std::array<VkShaderEXT, 2>{_vertex_shader.shader,
                                                     _fragment_shader.shader};
     auto shader_bits = std::array<VkShaderStageFlagBits, 2>{
         _vertex_shader.stage_flag, _fragment_shader.stage_flag};
-    vkCmdBindShadersEXT(_command_buffer,
+    vkCmdBindShadersEXT(command_buffer,
                         static_cast<uint32_t>(shader_stages.size()),
                         shader_bits.data(), shader_stages.data());
     for (uint32_t i = 0; i < _render_layers.size(); ++i) {
-      BindLayerDrawCommand(i);
-      vkCmdDrawIndexed(_command_buffer, _render_layers[i]->GetIndexCount(), 1,
-                       0, 0, 0);
+      BindLayerDrawCommand(command_buffer, i);
+      vkCmdDrawIndexed(command_buffer, _render_layers[i]->GetIndexCount(), 1, 0,
+                       0, 0);
     }
   }
   {
-    vkCmdEndRenderingKHR(_command_buffer);
-  }
-  {
-    const auto &images = driver->GetSwapchainImages();
-    driver->HTransitionImageLayout(
-        _command_buffer, images[index], VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    vkCmdEndRenderingKHR(command_buffer);
   }
 }
 
-void ModelRenderer::BindLayerDrawCommand(uint32_t index) const {
+void ModelRenderer::BindLayerDrawCommand(VkCommandBuffer command_buffer,
+                                         uint32_t index) const {
   VkDescriptorImageInfo const image_info = {
       .sampler = _sampler,
       .imageView = _render_layers[index]->GetImageView(),
@@ -517,15 +471,15 @@ void ModelRenderer::BindLayerDrawCommand(uint32_t index) const {
 
   auto write_sets =
       std::array<VkWriteDescriptorSet, 2>{ubo_write_set, write_set};
-  vkCmdPushDescriptorSetKHR(_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+  vkCmdPushDescriptorSetKHR(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             _pipeline_layout, 0, write_sets.size(),
                             write_sets.data());
 
   auto *vertex_buffer = _render_layers[index]->GetVertexBuffer();
   auto *index_buffer = _render_layers[index]->GetIndexBuffer();
   constexpr VkDeviceSize offset = 0;
-  vkCmdBindVertexBuffers(_command_buffer, 0, 1, &vertex_buffer, &offset);
-  vkCmdBindIndexBuffer(_command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
+  vkCmdBindVertexBuffers(command_buffer, 0, 1, &vertex_buffer, &offset);
+  vkCmdBindIndexBuffer(command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT32);
 }
 void ModelRenderer::AddLayer(Layer2dResource *layer) {
   _render_layers.push_back(layer);
@@ -535,12 +489,6 @@ ModelRenderer::~ModelRenderer() {
   vkDeviceWaitIdle(driver->GetDevice());
   _vertex_shader.Destroy(driver->GetDevice());
   _fragment_shader.Destroy(driver->GetDevice());
-  vkDestroySemaphore(driver->GetDevice(), _render_finished_semaphore, nullptr);
-  vkDestroySemaphore(driver->GetDevice(), _swap_chain_image_available_semaphore,
-                     nullptr);
-
-  vkFreeCommandBuffers(driver->GetDevice(), driver->GetCommandPool(), 1,
-                       &_command_buffer);
   _ubo_buffer.Destroy(driver->GetVmaAllocator());
   vkDestroySampler(driver->GetDevice(), _sampler, nullptr);
 
@@ -563,13 +511,63 @@ void ModelRenderer::SetCanvasSize(const uint32_t width, const uint32_t height) {
   AutoCenterCanvas();
 }
 
-void ModelRenderer::Render() {
-  auto *driver = VulkanDriver::GetSingleton();
-  vkQueueWaitIdle(driver->GetGraphicsQueue());
 
+ApplicationRenderer::ApplicationRenderer() {
+  _model_renderer = std::make_unique<ModelRenderer>();
+  auto driver = VulkanDriver::GetSingleton();
+  assert(driver != nullptr && "VulkanDriver is not initialized");
+  {
+    VkCommandBufferAllocateInfo const alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext = nullptr,
+        .commandPool = driver->GetCommandPool(),
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    AssertVkResult(vkAllocateCommandBuffers(driver->GetDevice(), &alloc_info,
+                                            &_app_command_buffer),
+                   "Failed to allocate command buffer");
+  }
+  {
+    VkSemaphoreCreateInfo const semaphore_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+    };
+    AssertVkResult(
+        vkCreateSemaphore(driver->GetDevice(), &semaphore_info, nullptr,
+                          &_swapchain_image_available_semaphore),
+        "Failed to create swapchain image available semaphore");
+    AssertVkResult(vkCreateSemaphore(driver->GetDevice(), &semaphore_info,
+                                     nullptr, &_graphics_finished_semaphore),
+                   "Failed to create graphics finished semaphore");
+  }
+}
+ApplicationRenderer::~ApplicationRenderer() {
+  auto driver = VulkanDriver::GetSingleton();
+  vkDeviceWaitIdle(driver->GetDevice());
+  vkDestroySemaphore(driver->GetDevice(), _swapchain_image_available_semaphore,
+                     nullptr);
+  vkDestroySemaphore(driver->GetDevice(), _graphics_finished_semaphore,
+                     nullptr);
+  vkFreeCommandBuffers(driver->GetDevice(), driver->GetCommandPool(), 1,
+                       &_app_command_buffer);
+}
+void ApplicationRenderer::SetWindowSize(int width, int height) {
+  _window_height = height;
+  _window_width = width;
+}
+void ApplicationRenderer::Render() {
+  auto driver = VulkanDriver::GetSingleton();
+  if (!driver->IsSwapchainValid()) {
+    driver->RecreateSwapchain({static_cast<uint32_t>(_window_width),
+                               static_cast<uint32_t>(_window_height)});
+  }
+  vkQueueWaitIdle(driver->GetGraphicsQueue());
+  // acquire image
   uint32_t index = 0;
-  const auto acquire_result = driver->AcquireSwapchainNextImage(
-      _swap_chain_image_available_semaphore, VK_NULL_HANDLE, index);
+  auto acquire_result = driver->AcquireSwapchainNextImage(
+      _swapchain_image_available_semaphore, VK_NULL_HANDLE, index);
   if (acquire_result != VK_SUCCESS) {
     if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR ||
         acquire_result == VK_SUBOPTIMAL_KHR) {
@@ -579,15 +577,37 @@ void ModelRenderer::Render() {
     AssertVkResult(acquire_result, "Failed to acquire swapchain image");
   }
 
+  auto target_image = driver->GetSwapchainImages()[index];
+  auto target_image_view = driver->GetSwapchainImageViews()[index];
+
   constexpr VkCommandBufferBeginInfo begin_info = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .pNext = nullptr,
   };
-  AssertVkResult(vkBeginCommandBuffer(_command_buffer, &begin_info),
+  AssertVkResult(vkBeginCommandBuffer(_app_command_buffer, &begin_info),
                  "Failed to begin command buffer");
-  RecordCommandBuffer();
 
-  vkEndCommandBuffer(_command_buffer);
+  // model render
+  driver->HTransitionImageLayout(_app_command_buffer, target_image, 0,
+                                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 VK_IMAGE_LAYOUT_UNDEFINED,
+                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+  _model_renderer->SetTargetView(target_image_view);
+
+  _model_renderer->RecordCommandBuffer(_app_command_buffer);
+
+  driver->HTransitionImageLayout(_app_command_buffer, target_image,
+                                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+  // end model render
+
+  vkEndCommandBuffer(_app_command_buffer);
 
   VkPipelineStageFlags const pipeline_stages[] = {
       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -596,27 +616,25 @@ void ModelRenderer::Render() {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
       .pNext = nullptr,
       .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &_swap_chain_image_available_semaphore,
+      .pWaitSemaphores = &_swapchain_image_available_semaphore,
       .pWaitDstStageMask = pipeline_stages,
       .commandBufferCount = 1,
-      .pCommandBuffers = &_command_buffer,
+      .pCommandBuffers = &_app_command_buffer,
       .signalSemaphoreCount = 1,
-      .pSignalSemaphores = &_render_finished_semaphore,
+      .pSignalSemaphores = &_graphics_finished_semaphore,
   };
-
   vkQueueSubmit(driver->GetGraphicsQueue(), 1, &submit_info, VK_NULL_HANDLE);
-  uint32_t const image_index = driver->GetCurrentSwapchainImageIndex();
+
   VkPresentInfoKHR const present_info = {
       .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
       .pNext = nullptr,
       .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &_render_finished_semaphore,
+      .pWaitSemaphores = &_graphics_finished_semaphore,
       .swapchainCount = 1,
       .pSwapchains = &driver->GetSwapchain(),
-      .pImageIndices = &image_index,
+      .pImageIndices = &index,
       .pResults = nullptr,
   };
-
   auto result = vkQueuePresentKHR(driver->GetPresentQueue(), &present_info);
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
     driver->MarkSwapchainInvalid();

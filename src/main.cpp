@@ -10,7 +10,7 @@
 #include "render_core/vulkan_driver.h"
 class AppWindow {
   GLFWwindow *_window;
-  rdc::ModelRenderer *_renderer = nullptr;
+  rdc::ApplicationRenderer *_renderer = nullptr;
   rdc::RenderResourceManager *_resource_manager = nullptr;
 
   VkResult CreateVulkanSurface(VkInstance instance, VkSurfaceKHR &surface) {
@@ -67,7 +67,8 @@ class AppWindow {
 
     // _driver = new rdc::VulkanDriver(config);
     rdc::VulkanDriver::InitSingleton(config);
-    _renderer = new rdc::ModelRenderer();
+    _renderer = new rdc::ApplicationRenderer();
+    auto model_renderer = _renderer->GetModelRenderer();
 
     // read layer
     _resource_manager = new rdc::RenderResourceManager();
@@ -121,28 +122,18 @@ class AppWindow {
           continue;
         }
         auto *res = _resource_manager->AddResource(std::move(layer_resource));
-        _renderer->AddLayer(res);
+        model_renderer->AddLayer(res);
       }
       const uint32_t canvas_width =
           layer_config["canvas"]["width"].get<uint32_t>();
       const uint32_t canvas_height =
           layer_config["canvas"]["height"].get<uint32_t>();
-      _renderer->SetCanvasSize(canvas_width, canvas_height);
+      model_renderer->SetCanvasSize(canvas_width, canvas_height);
     }
   }
   void Run() {
     while (!glfwWindowShouldClose(_window)) {
       glfwPollEvents();
-      auto *driver = rdc::VulkanDriver::GetSingleton();
-      if (!driver->IsSwapchainValid()) {
-        int width;
-        int height;
-        glfwGetFramebufferSize(_window, &width, &height);
-        if (width <= 0 || height <= 0) {
-          continue;  // Skip rendering if the window size is invalid
-        }
-        driver->RecreateSwapchain({static_cast<uint32_t>(width), static_cast<uint32_t>(height)});
-      }
       _renderer->Render();
     }
   }

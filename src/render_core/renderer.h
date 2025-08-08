@@ -55,7 +55,6 @@ class Layer2dResource : public IRenderResource, public NoCopyable {
 };
 
 class ModelRenderer {
-
   // render resources use to render layer
   std::vector<Layer2dResource *> _render_layers;
   VkDescriptorSetLayout _descriptor_set_layout = VK_NULL_HANDLE;
@@ -80,9 +79,8 @@ class ModelRenderer {
     }
   } _ubo_buffer;
 
-  VkCommandBuffer _command_buffer = VK_NULL_HANDLE;
-  VkSemaphore _render_finished_semaphore = VK_NULL_HANDLE;
-  VkSemaphore _swap_chain_image_available_semaphore = VK_NULL_HANDLE;
+  VkImageView _render_target_view = VK_NULL_HANDLE;
+
 
   struct Region {
     int x;
@@ -99,9 +97,8 @@ class ModelRenderer {
   void AutoCenterCanvas();
 
   void UpdateUniform();
-  void RecordCommandBuffer();
   // cmd
-  void BindLayerDrawCommand(uint32_t index) const;
+  void BindLayerDrawCommand(VkCommandBuffer commandbuffer,uint32_t index) const;
 
  public:
   ModelRenderer();
@@ -110,20 +107,27 @@ class ModelRenderer {
   ~ModelRenderer();
   void SetRegion(int pos_x, int pos_y, uint32_t width, uint32_t height);
   void SetCanvasSize(uint32_t width, uint32_t height);
+  void SetTargetView(VkImageView view) { _render_target_view = view; }
 
-  void Render();
+  void RecordCommandBuffer(VkCommandBuffer command_buffer);
 };
-
 
 class ApplicationRenderer {
   int _window_width = 800;
   int _window_height = 600;
+  std::unique_ptr<ModelRenderer> _model_renderer;
 
-public:
+  VkCommandBuffer _app_command_buffer = VK_NULL_HANDLE;
+  VkSemaphore _swapchain_image_available_semaphore = VK_NULL_HANDLE;
+  VkSemaphore _graphics_finished_semaphore = VK_NULL_HANDLE;
+
+ public:
+  ApplicationRenderer();
+  ~ApplicationRenderer();
   void SetWindowSize(int width, int height);
   void Render();
+  ModelRenderer *GetModelRenderer() const { return _model_renderer.get(); }
 };
-
 
 }  // namespace rdc
 #endif  // RENDER_CORE_RENDERER_H_
