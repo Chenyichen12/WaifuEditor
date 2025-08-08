@@ -129,6 +129,7 @@ class AppWindow {
       const uint32_t canvas_height =
           layer_config["canvas"]["height"].get<uint32_t>();
       model_renderer->SetCanvasSize(canvas_width, canvas_height);
+      model_renderer->SetCanvasOffset(200,200);
     }
   }
   void Run() {

@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 
+#include "backends/imgui_impl_vulkan.h"
 #include "canvas_sd.gen.h"
 #include "vulkan/vulkan_core.h"
 #include "vulkan_driver.h"
@@ -43,10 +44,85 @@ void SetVertexInput(VkCommandBuffer cmd) {
                          attributes.data());
 }
 
+rdc::Layer2dResource *CreateSolidLayerResource(const glm::vec4 &color) {
+  CPUImage cpu_image;
+  cpu_image.width = 1;
+  cpu_image.height = 1;
+  cpu_image.channels = 4;
+  auto *data = new uint8_t[4];
+  data[0] = color.x * 255;
+  data[1] = color.y * 255;
+  data[2] = color.z * 255;
+  data[3] = color.w * 255;
+
+  cpu_image.data = data;
+  cpu_image.deleter = [data]() { delete[] static_cast<uint8_t *>(data); };
+
+  rdc::Layer2dResource::ImageConfig texture_config{
+      .pimage = &cpu_image,
+      .format = VK_FORMAT_R8G8B8A8_UNORM,
+      .vertices = std::span<rdc::ModelVertex>(),
+      .indices = std::span<uint32_t>(),
+  };
+}
+
 }  // namespace
 
 namespace rdc {
+void Layer2dResource::SetVertex(std::span<ModelVertex> vertices,
+                                std::span<uint32_t> indices) {
+  if (_vertices.size() != vertices.size() ||
+      _indices.size() != indices.size()) {
+    _dirty_flag = 2;
+  } else {
+    _dirty_flag = 1;
+  }
+  _vertices = std::vector<ModelVertex>(vertices.begin(), vertices.end());
+  _indices = std::vector<uint32_t>(indices.begin(), indices.end());
+}
+void Layer2dResource::RefreshBuffer() {
+  if (_dirty_flag == 2) {
+    // delete
+    auto driver = VulkanDriver::GetSingleton();
+    vmaDestroyBuffer(driver->GetVmaAllocator(), _vertex_buffer._buffer,
+                     _vertex_buffer._allocation);
+    vmaDestroyBuffer(driver->GetVmaAllocator(), _index_buffer._buffer,
+                     _index_buffer._allocation);
 
+    // recreate vertex buffer
+    driver->HCreateBuffer(
+        sizeof(ModelVertex) * _vertices.size(),
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VMA_MEMORY_USAGE_CPU_TO_GPU, _vertex_buffer._buffer,
+        _vertex_buffer._allocation);
+    void *data;
+    vmaMapMemory(driver->GetVmaAllocator(), _vertex_buffer._allocation, &data);
+    memcpy(data, _vertices.data(), sizeof(ModelVertex) * _vertices.size());
+    vmaUnmapMemory(driver->GetVmaAllocator(), _vertex_buffer._allocation);
+    // recreate index buffer
+
+    driver->HCreateBuffer(
+        sizeof(uint32_t) * _indices.size(),
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VMA_MEMORY_USAGE_CPU_TO_GPU, _index_buffer._buffer,
+        _index_buffer._allocation);
+    vmaMapMemory(driver->GetVmaAllocator(), _index_buffer._allocation, &data);
+    memcpy(data, _indices.data(), sizeof(uint32_t) * _indices.size());
+    vmaUnmapMemory(driver->GetVmaAllocator(), _index_buffer._allocation);
+  } else if (_dirty_flag == 1) {
+    // update
+    auto driver = VulkanDriver::GetSingleton();
+    void *data;
+    vmaMapMemory(driver->GetVmaAllocator(), _vertex_buffer._allocation, &data);
+    memcpy(data, _vertices.data(), sizeof(ModelVertex) * _vertices.size());
+    vmaUnmapMemory(driver->GetVmaAllocator(), _vertex_buffer._allocation);
+
+    vmaMapMemory(driver->GetVmaAllocator(), _index_buffer._allocation, &data);
+    memcpy(data, _indices.data(), sizeof(uint32_t) * _indices.size());
+    vmaUnmapMemory(driver->GetVmaAllocator(), _index_buffer._allocation);
+  }
+  _dirty_flag = 0;
+}
 std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
     const ImageConfig &config) {
   assert(VulkanDriver::GetSingleton() != nullptr &&
@@ -136,37 +212,11 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-  result->_vertices =
-      std::vector<ModelVertex>(config.vertices.begin(), config.vertices.end());
-  result->_indices =
-      std::vector<uint32_t>(config.indices.begin(), config.indices.end());
-
   // create vertex buffer
-  driver->HCreateBuffer(
-      sizeof(ModelVertex) * result->_vertices.size(),
-      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-      VMA_MEMORY_USAGE_CPU_TO_GPU, result->_vertex_buffer._buffer,
-      result->_vertex_buffer._allocation);
-
-  // copy vertex data
-  vmaMapMemory(driver->GetVmaAllocator(), result->_vertex_buffer._allocation,
-               &data);
-
-  memcpy(data, result->_vertices.data(),
-         sizeof(ModelVertex) * result->_vertices.size());
-  vmaUnmapMemory(driver->GetVmaAllocator(), result->_vertex_buffer._allocation);
-
-  // create index buffer
-  driver->HCreateBuffer(
-      sizeof(uint32_t) * result->_indices.size(),
-      VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-      VMA_MEMORY_USAGE_CPU_TO_GPU, result->_index_buffer._buffer,
-      result->_index_buffer._allocation);
-  vmaMapMemory(driver->GetVmaAllocator(), result->_index_buffer._allocation,
-               &data);
-  memcpy(data, result->_indices.data(),
-         sizeof(uint32_t) * result->_indices.size());
-  vmaUnmapMemory(driver->GetVmaAllocator(), result->_index_buffer._allocation);
+  auto &vertices = config.vertices;
+  auto &indices = config.indices;
+  result->SetVertex(vertices, indices);
+  result->RefreshBuffer();
 
   driver->HEndOneTimeCommandBuffer(single_command_buffer,
                                    driver->GetGraphicsQueue());
@@ -330,6 +380,13 @@ void ModelRenderer::UpdateUniform() {
   ubo.region_offset = _canvas_offset;
   memcpy(data, &ubo, sizeof(ubo));
   vmaUnmapMemory(driver->GetVmaAllocator(), _ubo_buffer.allocation);
+}
+void ModelRenderer::PrepareRender() {
+  for (auto &layer : _render_layers) {
+    if (layer->IsBufferDirty()) {
+      layer->RefreshBuffer();
+    }
+  }
 }
 void ModelRenderer::RecordCommandBuffer(VkCommandBuffer command_buffer) {
   // begin record command buffer
@@ -510,8 +567,30 @@ void ModelRenderer::SetCanvasSize(const uint32_t width, const uint32_t height) {
   _canvas_height = height;
   AutoCenterCanvas();
 }
+}  // namespace rdc
 
+namespace rdc {
+void UiRenderer::RecordUiCommandBuffer(VkCommandBuffer command_buffer) {}
+void UiRenderer::InitImGuiRender() {
+  ImGui_ImplVulkan_InitInfo init_info = {};
+  auto driver = VulkanDriver::GetSingleton();
+  assert(driver != nullptr && "VulkanDriver is not initialized");
+  init_info.Instance = driver->GetInstance();
+  init_info.PhysicalDevice = driver->GetPhysicalDevice();
+  init_info.Device = driver->GetDevice();
+  init_info.QueueFamily = driver->GetGraphicsQueueFamilyIndex();
+  init_info.Queue = driver->GetGraphicsQueue();
+  init_info.DescriptorPool = driver->GetDescriptorPool();
+  init_info.MinImageCount = driver->GetSurfaceCapabilities().minImageCount;
+  init_info.ImageCount = driver->GetSwapchainImages().size();
+  init_info.CheckVkResultFn = [](VkResult err) { AssertVkResult(err); };
+  init_info.UseDynamicRendering = true;
+  ImGui_ImplVulkan_Init(&init_info);
+}
 
+}  // namespace rdc
+
+namespace rdc {
 ApplicationRenderer::ApplicationRenderer() {
   _model_renderer = std::make_unique<ModelRenderer>();
   auto driver = VulkanDriver::GetSingleton();
@@ -529,7 +608,7 @@ ApplicationRenderer::ApplicationRenderer() {
                    "Failed to allocate command buffer");
   }
   {
-    VkSemaphoreCreateInfo const semaphore_info = {
+    VkSemaphoreCreateInfo constexpr semaphore_info = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         .pNext = nullptr,
         .flags = 0,
@@ -564,6 +643,7 @@ void ApplicationRenderer::Render() {
                                static_cast<uint32_t>(_window_height)});
   }
   vkQueueWaitIdle(driver->GetGraphicsQueue());
+
   // acquire image
   uint32_t index = 0;
   auto acquire_result = driver->AcquireSwapchainNextImage(
@@ -584,6 +664,11 @@ void ApplicationRenderer::Render() {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .pNext = nullptr,
   };
+
+  // prepare
+  _model_renderer->PrepareRender();
+
+  vkResetCommandBuffer(_app_command_buffer, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
   AssertVkResult(vkBeginCommandBuffer(_app_command_buffer, &begin_info),
                  "Failed to begin command buffer");
 
@@ -596,7 +681,6 @@ void ApplicationRenderer::Render() {
                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
   _model_renderer->SetTargetView(target_image_view);
-
   _model_renderer->RecordCommandBuffer(_app_command_buffer);
 
   driver->HTransitionImageLayout(_app_command_buffer, target_image,

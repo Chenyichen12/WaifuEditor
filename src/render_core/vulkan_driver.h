@@ -38,6 +38,7 @@ class VulkanDriver {
   VkPhysicalDevice _physical_device = VK_NULL_HANDLE;
   VkSurfaceKHR _surface = VK_NULL_HANDLE;
   VmaAllocator _vma_allocator = VK_NULL_HANDLE;
+  VkDescriptorPool _descriptor_pool = VK_NULL_HANDLE;
   class SwapchainPacket {
    public:
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;
@@ -89,6 +90,9 @@ class VulkanDriver {
   uint32_t GetCurrentSwapchainImageIndex() const {
     return _swapchain_packet.current_image_index;
   }
+  VkSurfaceCapabilitiesKHR GetSurfaceCapabilities() const {
+    return _swapchain_packet.capabilities;
+  }
 
   bool IsSwapchainValid() const { return _swapchain_packet.is_valid; }
   VkResult AcquireSwapchainNextImage(const VkSemaphore &semaphore,
@@ -118,6 +122,10 @@ class VulkanDriver {
   const VkDevice &GetDevice() const { return _device; }
   const VkCommandPool &GetCommandPool() const { return _command_pool; }
   const VmaAllocator &GetVmaAllocator() const { return _vma_allocator; }
+  const VkInstance &GetInstance() const { return _instance; }
+  const VkPhysicalDevice &GetPhysicalDevice() const { return _physical_device; }
+  const VkDescriptorPool &GetDescriptorPool() const { return _descriptor_pool; }
+
 
   // helpers
   VkSampler HCreateSimpleSampler() const;

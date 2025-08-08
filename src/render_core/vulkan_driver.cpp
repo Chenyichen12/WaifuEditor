@@ -276,6 +276,39 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
                                        &_command_pool),
                    "Failed to create command pool");
   }
+  // descptior pool
+  {
+    VkDescriptorPoolSize ubo_pool_size = {
+        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 10,
+    };
+    VkDescriptorPoolSize sampler_pool_size = {
+        .type = VK_DESCRIPTOR_TYPE_SAMPLER,
+        .descriptorCount = 10,
+    };
+    VkDescriptorPoolSize buffer_pool_size = {
+        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .descriptorCount = 10,
+    };
+
+    std::vector<VkDescriptorPoolSize> pool_sizes = {
+        ubo_pool_size,
+        sampler_pool_size,
+        buffer_pool_size,
+    };
+    VkDescriptorPoolCreateInfo const descriptor_pool_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+        .maxSets = 10,
+        .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()),
+        .pPoolSizes = pool_sizes.data(),
+    };
+
+    AssertVkResult(vkCreateDescriptorPool(_device, &descriptor_pool_info,
+                                          nullptr, &_descriptor_pool),
+                   "Failed to create descriptor pool");
+  }
 }
 void VulkanDriver::CreateSwapchain(const VkExtent2D &extent) {
   _swapchain_packet.QuerySwapchainSupport(_physical_device, _surface);
@@ -502,6 +535,7 @@ VulkanDriver::~VulkanDriver() {
   }
   vmaDestroyAllocator(_vma_allocator);
   vkDestroyCommandPool(_device, _command_pool, nullptr);
+  vkDestroyDescriptorPool(_device, _descriptor_pool, nullptr);
   _swapchain_packet.Destroy(_device);
   vkDestroySurfaceKHR(_instance, _surface, nullptr);
   vkDestroyDevice(_device, nullptr);

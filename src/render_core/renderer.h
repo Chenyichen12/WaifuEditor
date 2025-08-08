@@ -19,24 +19,22 @@ struct ModelVertex {
 
 class Layer2dResource : public IRenderResource, public NoCopyable {
   // friend class ModelRenderer;
-  bool _dirty = false;
 
   VkImage _image = VK_NULL_HANDLE;
   VmaAllocation _allocation = VK_NULL_HANDLE;
   VkImageView _image_view = VK_NULL_HANDLE;
   Layer2dResource() = default;
-
-  std::vector<ModelVertex> _vertices;
-  std::vector<uint32_t> _indices;
   struct Buffer {
     VkBuffer _buffer = VK_NULL_HANDLE;
     VmaAllocation _allocation = VK_NULL_HANDLE;
   };
   Buffer _vertex_buffer;
   Buffer _index_buffer;
+  std::vector<ModelVertex> _vertices;
+  std::vector<uint32_t> _indices;
+  int _dirty_flag = 0;  // 1: dirt, 2: need recreate, 0: clean
 
  public:
-  void MarkDirty() { _dirty = true; }
   struct ImageConfig {
     CPUImage *pimage = nullptr;
     VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -50,6 +48,9 @@ class Layer2dResource : public IRenderResource, public NoCopyable {
   VkImage GetImage() const { return _image; }
   VkImageView GetImageView() const { return _image_view; }
   uint32_t GetIndexCount() const { return _indices.size(); }
+  void SetVertex(std::span<ModelVertex> vertices, std::span<uint32_t> indices);
+  bool IsBufferDirty() const { return _dirty_flag != 0; }
+  void RefreshBuffer();
 
   ~Layer2dResource() override;
 };
@@ -81,7 +82,6 @@ class ModelRenderer {
 
   VkImageView _render_target_view = VK_NULL_HANDLE;
 
-
   struct Region {
     int x;
     int y;
@@ -94,22 +94,48 @@ class ModelRenderer {
 
   uint32_t _canvas_width = 800;
   uint32_t _canvas_height = 600;
-  void AutoCenterCanvas();
 
   void UpdateUniform();
   // cmd
-  void BindLayerDrawCommand(VkCommandBuffer commandbuffer,uint32_t index) const;
+  void BindLayerDrawCommand(VkCommandBuffer command_buffer,
+                            uint32_t index) const;
 
  public:
   ModelRenderer();
   void AddLayer(Layer2dResource *layer);
   std::span<Layer2dResource *> GetLayers() { return _render_layers; }
   ~ModelRenderer();
+
   void SetRegion(int pos_x, int pos_y, uint32_t width, uint32_t height);
   void SetCanvasSize(uint32_t width, uint32_t height);
-  void SetTargetView(VkImageView view) { _render_target_view = view; }
+  void AutoCenterCanvas();
+  void SetCanvasOffset(float x, float y) {
+    _canvas_offset.x = x;
+    _canvas_offset.y = y;
+  }
 
+  void SetTargetView(VkImageView view) { _render_target_view = view; }
+  void PrepareRender();
   void RecordCommandBuffer(VkCommandBuffer command_buffer);
+};
+
+class UiRenderer {
+  int _ui_width = 800;
+  int _ui_height = 600;
+  VkImageView _render_target_view = VK_NULL_HANDLE;
+
+ public:
+  void SetUiSize(int width, int height) {
+    _ui_width = width;
+    _ui_height = height;
+  }
+  void SetRenderTargetView(const VkImageView view) {
+    _render_target_view = view;
+  }
+
+  void RecordUiCommandBuffer(VkCommandBuffer command_buffer);
+
+  static void InitImGuiRender();
 };
 
 class ApplicationRenderer {
