@@ -5,7 +5,7 @@ set(waifu_source main.cpp)
 
 # sources
 file(GLOB waifu_render_core_source ./render_core/*.cpp ./render_core/*.h)
-file(GLOB waifu_editor_source ./editor/*.cpp, ./editor/*.h)
+file(GLOB waifu_editor_source ./editor/*.cpp ./editor/*.h)
 
 
 #

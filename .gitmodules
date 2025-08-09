@@ -19,3 +19,6 @@
 [submodule "vendor/json"]
 	path = vendor/json
 	url = https://github.com/nlohmann/json.git
+[submodule "vendor/sigslot"]
+	path = vendor/sigslot
+	url = https://github.com/palacaze/sigslot.git

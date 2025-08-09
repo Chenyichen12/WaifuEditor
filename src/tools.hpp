@@ -34,5 +34,8 @@ public:
   virtual ~NoCopyable() = default;
 };
 
+template<typename T, typename... Args>
+void WaifuUnused(const T&, const Args&...) {}
+
 
 #endif // TOOLS_HPP_

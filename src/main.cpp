@@ -1,59 +1,34 @@
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <vector>
 
+#include "editor/gui.h"
 #include "render_core/renderer.h"
 #include "render_core/vulkan_driver.h"
+
 class AppWindow {
-  GLFWwindow *_window;
   rdc::ApplicationRenderer *_renderer = nullptr;
   rdc::RenderResourceManager *_resource_manager = nullptr;
-
-  VkResult CreateVulkanSurface(VkInstance instance, VkSurfaceKHR &surface) {
-    if (glfwCreateWindowSurface(instance, _window, nullptr, &surface) !=
-        VK_SUCCESS) {
-      std::cerr << "Failed to create Vulkan surface\n";
-      return VK_ERROR_UNKNOWN;
-    }
-    return VK_SUCCESS;
-  }
-  // handle the windows resize
-  static void WindowResizeCallback(GLFWwindow *window, int, int) {
-    auto *driver = rdc::VulkanDriver::GetSingleton();
-    if (driver) {
-      driver->MarkSwapchainInvalid();
-    }
-  }
+  editor::Gui *_gui = nullptr;
 
  public:
   AppWindow() {
     if (!glfwInit()) {
       std::abort();
     }
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-    _window = glfwCreateWindow(800, 600, "WaifuStudio", nullptr, nullptr);
-
-    if (!_window) {
-      std::cerr << "fail to create window\n";
-      std::abort();
-    }
-
-    // set resize callback
-    glfwSetWindowSizeCallback(_window, WindowResizeCallback);
+    _gui = new editor::Gui();
+    // _gui->WindowResizeSignal.connect([this](int width, int height) {
+    // });
 
     rdc::VulkanDriverConfig config;
     config.initial_height = 600;
     config.initial_width = 800;
     config.create_surface_callback = [this](VkInstance instance,
                                             VkSurfaceKHR &surface) {
-      return CreateVulkanSurface(instance, surface);
+      return this->_gui->CreateVulkanSurface(instance, surface);
     };
-    // vulkan init
+
     {
       uint32_t glfw_extensions = 0;
       auto *extensions = glfwGetRequiredInstanceExtensions(&glfw_extensions);
@@ -68,12 +43,12 @@ class AppWindow {
     // _driver = new rdc::VulkanDriver(config);
     rdc::VulkanDriver::InitSingleton(config);
     _renderer = new rdc::ApplicationRenderer();
-    auto model_renderer = _renderer->GetModelRenderer();
+    auto *model_renderer = _renderer->GetModelRenderer();
 
     // read layer
     _resource_manager = new rdc::RenderResourceManager();
-    nlohmann::json layer_config;
     {
+      nlohmann::json layer_config;
       std::ifstream layer_file("../test/layers.json");
       if (!layer_file.is_open()) {
         std::cerr << "Failed to open layers.json\n";
@@ -129,21 +104,21 @@ class AppWindow {
       const uint32_t canvas_height =
           layer_config["canvas"]["height"].get<uint32_t>();
       model_renderer->SetCanvasSize(canvas_width, canvas_height);
-      model_renderer->SetCanvasOffset(200,200);
     }
   }
   void Run() {
-    while (!glfwWindowShouldClose(_window)) {
+    while (!glfwWindowShouldClose(_gui->GetWindow())) {
       glfwPollEvents();
+      _gui->TickGui();
       _renderer->Render();
     }
   }
   ~AppWindow() {
     delete _renderer;
     delete _resource_manager;
+    delete _gui;
     rdc::VulkanDriver::CleanupSingleton();
 
-    glfwDestroyWindow(_window);
     glfwTerminate();
   }
 };

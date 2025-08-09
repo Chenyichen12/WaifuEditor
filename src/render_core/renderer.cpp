@@ -1,7 +1,6 @@
 #include "renderer.h"
 
 #include <array>
-#include <cassert>
 #include <memory>
 #include <vector>
 
@@ -44,28 +43,6 @@ void SetVertexInput(VkCommandBuffer cmd) {
                          attributes.data());
 }
 
-rdc::Layer2dResource *CreateSolidLayerResource(const glm::vec4 &color) {
-  CPUImage cpu_image;
-  cpu_image.width = 1;
-  cpu_image.height = 1;
-  cpu_image.channels = 4;
-  auto *data = new uint8_t[4];
-  data[0] = color.x * 255;
-  data[1] = color.y * 255;
-  data[2] = color.z * 255;
-  data[3] = color.w * 255;
-
-  cpu_image.data = data;
-  cpu_image.deleter = [data]() { delete[] static_cast<uint8_t *>(data); };
-
-  rdc::Layer2dResource::ImageConfig texture_config{
-      .pimage = &cpu_image,
-      .format = VK_FORMAT_R8G8B8A8_UNORM,
-      .vertices = std::span<rdc::ModelVertex>(),
-      .indices = std::span<uint32_t>(),
-  };
-}
-
 }  // namespace
 
 namespace rdc {
@@ -83,7 +60,7 @@ void Layer2dResource::SetVertex(std::span<ModelVertex> vertices,
 void Layer2dResource::RefreshBuffer() {
   if (_dirty_flag == 2) {
     // delete
-    auto driver = VulkanDriver::GetSingleton();
+    auto *driver = VulkanDriver::GetSingleton();
     vmaDestroyBuffer(driver->GetVmaAllocator(), _vertex_buffer._buffer,
                      _vertex_buffer._allocation);
     vmaDestroyBuffer(driver->GetVmaAllocator(), _index_buffer._buffer,
@@ -111,7 +88,7 @@ void Layer2dResource::RefreshBuffer() {
     vmaUnmapMemory(driver->GetVmaAllocator(), _index_buffer._allocation);
   } else if (_dirty_flag == 1) {
     // update
-    auto driver = VulkanDriver::GetSingleton();
+    auto *driver = VulkanDriver::GetSingleton();
     void *data;
     vmaMapMemory(driver->GetVmaAllocator(), _vertex_buffer._allocation, &data);
     memcpy(data, _vertices.data(), sizeof(ModelVertex) * _vertices.size());
@@ -125,8 +102,6 @@ void Layer2dResource::RefreshBuffer() {
 }
 std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
     const ImageConfig &config) {
-  assert(VulkanDriver::GetSingleton() != nullptr &&
-         "VulkanDriver is not initialized");
   auto *driver = VulkanDriver::GetSingleton();
 
   auto result = std::unique_ptr<Layer2dResource>(new Layer2dResource());
@@ -213,8 +188,8 @@ std::unique_ptr<Layer2dResource> Layer2dResource::CreateFromImage(
       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
   // create vertex buffer
-  auto &vertices = config.vertices;
-  auto &indices = config.indices;
+  const auto &vertices = config.vertices;
+  const auto &indices = config.indices;
   result->SetVertex(vertices, indices);
   result->RefreshBuffer();
 
@@ -267,7 +242,6 @@ Layer2dResource::~Layer2dResource() {
 
 ModelRenderer::ModelRenderer() {
   const auto *driver = VulkanDriver::GetSingleton();
-  assert(driver != nullptr && "driver isn't init");
   {
     _sampler = driver->HCreateSimpleSampler();
   }
@@ -312,7 +286,8 @@ ModelRenderer::ModelRenderer() {
         "Failed to create pipeline layout");
   }
   {
-    VkDeviceSize size = sizeof(shader_gen::canvas_sd::UniformBufferObject);
+    VkDeviceSize const size =
+        sizeof(shader_gen::canvas_sd::UniformBufferObject);
     driver->HCreateBuffer(
         size,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -361,16 +336,16 @@ void ModelRenderer::AutoCenterCanvas() {
   auto width_scale = static_cast<float>(_region.width) / _canvas_width;
   auto height_scale = static_cast<float>(_region.height) / _canvas_height;
   auto canvas_2_region_scale = std::min(width_scale, height_scale);
-  float canvas_x_offset =
+  float const canvas_x_offset =
       (_region.width - _canvas_width * canvas_2_region_scale) / 2.0f;
-  float canvas_y_offset =
+  float const canvas_y_offset =
       (_region.height - _canvas_height * canvas_2_region_scale) / 2.0f;
   _canvas_scale = canvas_2_region_scale;
   _canvas_offset.x = canvas_x_offset;
   _canvas_offset.y = canvas_y_offset;
 }
 void ModelRenderer::UpdateUniform() {
-  const auto driver = VulkanDriver::GetSingleton();
+  auto *driver = VulkanDriver::GetSingleton();
   void *data;
   vmaMapMemory(driver->GetVmaAllocator(), _ubo_buffer.allocation, &data);
   shader_gen::canvas_sd::UniformBufferObject ubo = {};
@@ -449,8 +424,6 @@ void ModelRenderer::RecordCommandBuffer(VkCommandBuffer command_buffer) {
     };
     vkCmdSetColorBlendEquationEXT(command_buffer, 0 /* firstAttachment */,
                                   1 /* count */, &blend_equation);
-    // blend
-    VkPipelineColorBlendAttachmentState color_blend_attachment = {};
 
     const VkColorComponentFlags color_mask =
         VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
@@ -570,12 +543,58 @@ void ModelRenderer::SetCanvasSize(const uint32_t width, const uint32_t height) {
 }  // namespace rdc
 
 namespace rdc {
-void UiRenderer::RecordUiCommandBuffer(VkCommandBuffer command_buffer) {}
+void UiRenderer::RecordUiCommandBuffer(VkCommandBuffer command_buffer) {
+  ImGui::Render();
+  auto *draw_data = ImGui::GetDrawData();
+  if (draw_data == nullptr) {
+    return;
+  }
+  auto *driver = VulkanDriver::GetSingleton();
+  {
+    VkRenderingAttachmentInfo att_info = {};
+    att_info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    att_info.imageView = _render_target_view;
+    att_info.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    att_info.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    att_info.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    att_info.clearValue = {.color = {0.8f, 0.8f, 0.8f, 1.0f}};
+    att_info.resolveMode = VK_RESOLVE_MODE_NONE;
+
+    // render_info
+    VkRenderingInfo const render_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .renderArea =
+            {
+                .offset = {0, 0},
+                .extent = driver->GetSwapchainExtent(),
+            },
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &att_info,
+    };
+    vkCmdBeginRenderingKHR(command_buffer, &render_info);
+  }
+  {
+    ImGui_ImplVulkan_RenderDrawData(draw_data, command_buffer);
+  }
+  {
+    vkCmdEndRenderingKHR(command_buffer);
+  }
+}
+UiRenderer::UiRenderer() { InitImGuiRender(); }
+UiRenderer::~UiRenderer() { ImGui_ImplVulkan_Shutdown(); }
 void UiRenderer::InitImGuiRender() {
+  auto *ctx = ImGui::GetCurrentContext();
+  if (ctx == nullptr) {
+    ctx = ImGui::CreateContext();
+    ImGui::SetCurrentContext(ctx);
+  }
   ImGui_ImplVulkan_InitInfo init_info = {};
-  auto driver = VulkanDriver::GetSingleton();
-  assert(driver != nullptr && "VulkanDriver is not initialized");
+  auto *driver = VulkanDriver::GetSingleton();
   init_info.Instance = driver->GetInstance();
+  init_info.ApiVersion = VK_API_VERSION_1_2;
   init_info.PhysicalDevice = driver->GetPhysicalDevice();
   init_info.Device = driver->GetDevice();
   init_info.QueueFamily = driver->GetGraphicsQueueFamilyIndex();
@@ -585,6 +604,15 @@ void UiRenderer::InitImGuiRender() {
   init_info.ImageCount = driver->GetSwapchainImages().size();
   init_info.CheckVkResultFn = [](VkResult err) { AssertVkResult(err); };
   init_info.UseDynamicRendering = true;
+
+  VkPipelineRenderingCreateInfoKHR const pipeline_rendering_info = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
+      .pNext = nullptr,
+      .viewMask = 0,
+      .colorAttachmentCount = 1,
+      .pColorAttachmentFormats = &driver->GetSwapchainFormat()};
+  init_info.PipelineRenderingCreateInfo = pipeline_rendering_info;
+
   ImGui_ImplVulkan_Init(&init_info);
 }
 
@@ -593,8 +621,8 @@ void UiRenderer::InitImGuiRender() {
 namespace rdc {
 ApplicationRenderer::ApplicationRenderer() {
   _model_renderer = std::make_unique<ModelRenderer>();
-  auto driver = VulkanDriver::GetSingleton();
-  assert(driver != nullptr && "VulkanDriver is not initialized");
+  _ui_renderer = std::make_unique<UiRenderer>();
+  auto *driver = VulkanDriver::GetSingleton();
   {
     VkCommandBufferAllocateInfo const alloc_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -623,7 +651,7 @@ ApplicationRenderer::ApplicationRenderer() {
   }
 }
 ApplicationRenderer::~ApplicationRenderer() {
-  auto driver = VulkanDriver::GetSingleton();
+  auto* driver = VulkanDriver::GetSingleton();
   vkDeviceWaitIdle(driver->GetDevice());
   vkDestroySemaphore(driver->GetDevice(), _swapchain_image_available_semaphore,
                      nullptr);
@@ -637,7 +665,7 @@ void ApplicationRenderer::SetWindowSize(int width, int height) {
   _window_width = width;
 }
 void ApplicationRenderer::Render() {
-  auto driver = VulkanDriver::GetSingleton();
+  auto *driver = VulkanDriver::GetSingleton();
   if (!driver->IsSwapchainValid()) {
     driver->RecreateSwapchain({static_cast<uint32_t>(_window_width),
                                static_cast<uint32_t>(_window_height)});
@@ -657,8 +685,8 @@ void ApplicationRenderer::Render() {
     AssertVkResult(acquire_result, "Failed to acquire swapchain image");
   }
 
-  auto target_image = driver->GetSwapchainImages()[index];
-  auto target_image_view = driver->GetSwapchainImageViews()[index];
+  auto *target_image = driver->GetSwapchainImages()[index];
+  auto *target_image_view = driver->GetSwapchainImageViews()[index];
 
   constexpr VkCommandBufferBeginInfo begin_info = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -682,6 +710,9 @@ void ApplicationRenderer::Render() {
 
   _model_renderer->SetTargetView(target_image_view);
   _model_renderer->RecordCommandBuffer(_app_command_buffer);
+
+  _ui_renderer->SetRenderTargetView(target_image_view);
+  _ui_renderer->RecordUiCommandBuffer(_app_command_buffer);
 
   driver->HTransitionImageLayout(_app_command_buffer, target_image,
                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0,

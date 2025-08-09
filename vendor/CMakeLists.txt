@@ -24,6 +24,6 @@ target_include_directories(single_head
         PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/glm
         PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/volk
         PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/json/single_include
-        PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/json/single_include
+        PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sigslot/include
 )
 target_link_libraries(single_head PRIVATE Vulkan::Headers)

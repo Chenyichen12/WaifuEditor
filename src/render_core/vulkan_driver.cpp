@@ -278,15 +278,15 @@ VulkanDriver::VulkanDriver(const VulkanDriverConfig &config) {
   }
   // descptior pool
   {
-    VkDescriptorPoolSize ubo_pool_size = {
+    VkDescriptorPoolSize constexpr  ubo_pool_size = {
         .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .descriptorCount = 10,
     };
-    VkDescriptorPoolSize sampler_pool_size = {
-        .type = VK_DESCRIPTOR_TYPE_SAMPLER,
+    VkDescriptorPoolSize constexpr  sampler_pool_size = {
+        .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount = 10,
     };
-    VkDescriptorPoolSize buffer_pool_size = {
+    VkDescriptorPoolSize constexpr buffer_pool_size = {
         .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         .descriptorCount = 10,
     };

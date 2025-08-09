@@ -4,6 +4,7 @@
 #include <vk_mem_alloc.h>
 #include <volk.h>
 
+#include <cassert>
 #include <cstdint>
 #include <functional>
 #include <vector>
@@ -126,7 +127,6 @@ class VulkanDriver {
   const VkPhysicalDevice &GetPhysicalDevice() const { return _physical_device; }
   const VkDescriptorPool &GetDescriptorPool() const { return _descriptor_pool; }
 
-
   // helpers
   VkSampler HCreateSimpleSampler() const;
   VkCommandBuffer HBeginOneTimeCommandBuffer() const;
@@ -176,7 +176,11 @@ class VulkanDriver {
   static void InitSingleton(const VulkanDriverConfig &config) {
     singleton_driver = new VulkanDriver(config);
   }
-  static VulkanDriver *GetSingleton() { return singleton_driver; }
+  static VulkanDriver *GetSingleton() {
+    assert(singleton_driver != nullptr &&
+           "VulkanDriver singleton is not initialized");
+    return singleton_driver;
+  }
   static void CleanupSingleton() {
     delete singleton_driver;
     singleton_driver = nullptr;
