@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 #include <vector>
 
+#include "editor/document.h"
 #include "editor/gui.h"
 #include "render_core/renderer.h"
 #include "render_core/vulkan_driver.h"
@@ -117,8 +118,10 @@ class AppWindow {
     delete _renderer;
     delete _resource_manager;
     delete _gui;
-    rdc::VulkanDriver::CleanupSingleton();
 
+    editor::EditorConfig *config = editor::EditorConfig::GetInstance();
+    config->SaveConfig();
+    rdc::VulkanDriver::CleanupSingleton();
     glfwTerminate();
   }
 };

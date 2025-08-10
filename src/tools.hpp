@@ -2,13 +2,14 @@
 #define TOOLS_HPP_
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 template <typename Func, typename Object, typename... Args>
   requires std::is_void_v<
-      std::invoke_result_t<Func, Object *, Args...>> // 限定返回类型为 void
+      std::invoke_result_t<Func, Object *, Args...>>  // 限定返回类型为 void
 void SafeCall(Object *obj, Func &&func, Args &&...args) {
-  if (obj) {                                   // 检查对象指针是否为空
-    (obj->*func)(std::forward<Args>(args)...); // 调用成员函数
+  if (obj) {                                    // 检查对象指针是否为空
+    (obj->*func)(std::forward<Args>(args)...);  // 调用成员函数
   } else {
     return;
   }
@@ -17,7 +18,7 @@ void SafeCall(Object *obj, Func &&func, Args &&...args) {
 class IdAllocator {
   std::atomic_uint32_t _current_id = 0;
 
-public:
+ public:
   uint32_t AllocateId() {
     return _current_id.fetch_add(1, std::memory_order_relaxed);
   }
@@ -25,7 +26,7 @@ public:
 };
 
 class NoCopyable {
-public:
+ public:
   NoCopyable() = default;
   NoCopyable(const NoCopyable &) = delete;
   NoCopyable &operator=(const NoCopyable &) = delete;
@@ -34,12 +35,54 @@ public:
   virtual ~NoCopyable() = default;
 };
 
-template<typename T, typename... Args>
-void WaifuUnused(const T&, const Args&...) {}
+template <typename T, typename... Args>
+void WaifuUnused(const T &, const Args &...) {}
 
-template <typename T = const char*>
-const char* WaifuTr(const char* value){
+template <typename T = const char *>
+const char *WaifuTr(const char *value) {
   return value;
 }
 
-#endif // TOOLS_HPP_
+template <typename ValueType>
+class Property {
+ public:
+  Property(ValueType value, std::function<void(ValueType)> setter = nullptr,
+           std::function<ValueType()> getter = nullptr)
+      : _value(value), _setter(setter), _getter(getter) {}
+  explicit Property() = default;
+  Property<ValueType>& operator=(ValueType value) {
+    if (_setter) {
+      _setter(value);
+    } else {
+      _value = value;
+    }
+    return *this;
+  }
+  Property<ValueType> &operator=(const Property<ValueType> &other) = default;
+
+  ValueType operator()() const {
+    return Get();
+  }
+
+  void Set(ValueType value) {
+    if (_setter) {
+      _setter(value);
+    } else {
+      _value = value;
+    }
+  }
+
+  ValueType Get() const {
+    if (_getter) {
+      return _getter();
+    }
+    return _value;
+  }
+
+ private:
+  ValueType _value;
+  std::function<void(ValueType)> _setter = nullptr;
+  std::function<ValueType()> _getter = nullptr;
+};
+
+#endif  // TOOLS_HPP_

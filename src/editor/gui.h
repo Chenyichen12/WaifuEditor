@@ -10,6 +10,7 @@ namespace editor {
 class Gui {
   GLFWwindow *_window = nullptr;
   static void WindowResizeCallback(GLFWwindow *window, int width, int height);
+  static void WindowPosCallback(GLFWwindow *window, int x, int y);
 
  public:
   Gui();
