@@ -1,5 +1,6 @@
 
 add_subdirectory(glfw)
+# add_subdirectory(freetype)
 
 find_package(Vulkan REQUIRED)
 set(imgui_source
@@ -10,6 +11,7 @@ set(imgui_source
         imgui/imgui_widgets.cpp
         imgui/backends/imgui_impl_glfw.cpp
         imgui/backends/imgui_impl_vulkan.cpp
+        # imgui/misc/freetype/imgui_freetype.cpp
 )
 add_library(imgui ${imgui_source})
 target_compile_definitions(imgui PRIVATE IMGUI_IMPL_VULKAN_USE_VOLK)

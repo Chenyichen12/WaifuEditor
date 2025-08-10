@@ -42,8 +42,12 @@ Gui::Gui() {
     (void)imgui_io;
     imgui_io.ConfigFlags |=
         ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-    ImGui::StyleColorsDark();
+
     ImGui_ImplGlfw_InitForVulkan(_window, true);
+
+    auto *font = imgui_io.Fonts->AddFontFromFileTTF(
+        "res/souce_han_normal.otf", 30.0f);
+    imgui_io.FontDefault = font;
   }
 }
 
@@ -54,6 +58,13 @@ Gui::~Gui() {
     glfwDestroyWindow(_window);
     _window = nullptr;
   }
+
+  // sidebar window
+  ImGui::Begin("LeftSideBar");
+  
+
+
+  ImGui::End();
 }
 
 void Gui::TickGui() {

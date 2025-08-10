@@ -110,7 +110,7 @@ def parse_shader_structs_uniforms(content: str):
                 "type": var_type
             })
 
-        result = {
+        result: UnifromStructVariable = {
             "binding": binding,
             "name": struct_name,
             "member": members,
@@ -413,6 +413,7 @@ def main():
         # print(c_code)
         with open(output_file, 'w') as f:
             f.write(c_code)
+            print(f"Generated shader header file at {output_file}")
 
     except Exception as e:
         print(f"Error processing file {input_file}: {e}")

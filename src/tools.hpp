@@ -37,5 +37,9 @@ public:
 template<typename T, typename... Args>
 void WaifuUnused(const T&, const Args&...) {}
 
+template <typename T = const char*>
+const char* WaifuTr(const char* value){
+  return value;
+}
 
 #endif // TOOLS_HPP_

@@ -6,6 +6,7 @@
 
 #include "backends/imgui_impl_vulkan.h"
 #include "canvas_sd.gen.h"
+#include "imgui.h"
 #include "vulkan/vulkan_core.h"
 #include "vulkan_driver.h"
 
@@ -614,6 +615,9 @@ void UiRenderer::InitImGuiRender() {
   init_info.PipelineRenderingCreateInfo = pipeline_rendering_info;
 
   ImGui_ImplVulkan_Init(&init_info);
+
+  // only build font after build vulkan
+  ImGui::GetIO().Fonts->Build();
 }
 
 }  // namespace rdc
