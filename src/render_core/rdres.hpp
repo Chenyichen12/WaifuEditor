@@ -1,7 +1,6 @@
 #ifndef RENDER_CORE_RDRES_HPP_
 #define RENDER_CORE_RDRES_HPP_
 
-#include "vulkan_driver.h"
 #include "tools.hpp"
 namespace rdc {
 class IRenderResource {
@@ -15,24 +14,6 @@ class IRenderResource {
   virtual ~IRenderResource() = default;
 };
 
-class ImageRenderResource : public IRenderResource {
-  VkImage _image = VK_NULL_HANDLE;
-  VmaAllocation _allocation = VK_NULL_HANDLE;
-  VkImageView _image_view = VK_NULL_HANDLE;
-  VulkanDriver *_driver = nullptr;
-
- public:
-  ImageRenderResource(VkImage image, VmaAllocation allocation,
-                      VkImageView image_view, VulkanDriver *driver)
-      : _image(image),
-        _allocation(allocation),
-        _image_view(image_view),
-        _driver(driver) {}
-  ~ImageRenderResource() override {
-    vkDestroyImageView(_driver->GetDevice(), _image_view, nullptr);
-    vmaDestroyImage(_driver->GetVmaAllocator(), _image, _allocation);
-  }
-};
 
 class RenderResourceManager {
   std::unordered_map<uint32_t, std::unique_ptr<IRenderResource>> _resources;

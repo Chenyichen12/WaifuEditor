@@ -5,7 +5,7 @@
 
 #include "editor/document.h"
 #include "editor/gui.h"
-#include "render_core/renderer.h"
+#include "render_core/renderer/renderer.h"
 #include "render_core/vulkan_driver.h"
 
 class AppWindow {

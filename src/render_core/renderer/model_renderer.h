@@ -1,18 +1,15 @@
-#ifndef RENDER_CORE_RENDERER_H_
-#define RENDER_CORE_RENDERER_H_
-#include <cstdint>
+#ifndef RENDER_CORE_RENDERER_MODEL_RENDERER_H_
+#define RENDER_CORE_RENDERER_MODEL_RENDERER_H_
+
+#include <volk.h>
+#include <vk_mem_alloc.h>
 #include <glm/glm.hpp>
-#include <memory>
 #include <span>
-#include <vector>
-
+#include "render_core/rdres.hpp"
 #include "editor/types.hpp"
-#include "rdres.hpp"
-#include "vulkan/vulkan_core.h"
-#include "vulkan_driver.h"
-namespace rdc {
 
-struct ModelVertex {
+namespace rdc {
+    struct ModelVertex {
   glm::vec2 position;
   glm::vec2 uv;
 };
@@ -118,46 +115,6 @@ class ModelRenderer {
   void PrepareRender();
   void RecordCommandBuffer(VkCommandBuffer command_buffer);
 };
+}
 
-class UiRenderer {
-  int _ui_width = 800;
-  int _ui_height = 600;
-  VkImageView _render_target_view = VK_NULL_HANDLE;
-
-  static void InitImGuiRender();
-
- public:
-  void SetUiSize(int width, int height) {
-    _ui_width = width;
-    _ui_height = height;
-  }
-  void SetRenderTargetView(const VkImageView &view) {
-    _render_target_view = view;
-  }
-
-  void RecordUiCommandBuffer(VkCommandBuffer command_buffer);
-  UiRenderer();
-  ~UiRenderer();
-};
-
-class ApplicationRenderer {
-  int _window_width = 800;
-  int _window_height = 600;
-  std::unique_ptr<ModelRenderer> _model_renderer;
-  std::unique_ptr<UiRenderer> _ui_renderer;
-
-  VkCommandBuffer _app_command_buffer = VK_NULL_HANDLE;
-  VkSemaphore _swapchain_image_available_semaphore = VK_NULL_HANDLE;
-  VkSemaphore _graphics_finished_semaphore = VK_NULL_HANDLE;
-
- public:
-  ApplicationRenderer();
-  ~ApplicationRenderer();
-  void SetWindowSize(int width, int height);
-  void Render();
-  ModelRenderer *GetModelRenderer() const { return _model_renderer.get(); }
-  UiRenderer *GetUiRenderer() const { return _ui_renderer.get(); }
-};
-
-}  // namespace rdc
-#endif  // RENDER_CORE_RENDERER_H_
+#endif  // RENDER_CORE_RENDERER_MODEL_RENDERER_H_

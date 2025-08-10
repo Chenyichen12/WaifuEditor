@@ -126,7 +126,6 @@ class VulkanDriver {
   const VkInstance &GetInstance() const { return _instance; }
   const VkPhysicalDevice &GetPhysicalDevice() const { return _physical_device; }
   const VkDescriptorPool &GetDescriptorPool() const { return _descriptor_pool; }
-
   // helpers
   VkSampler HCreateSimpleSampler() const;
   VkCommandBuffer HBeginOneTimeCommandBuffer() const;
@@ -165,7 +164,6 @@ class VulkanDriver {
   void HCreateBuffer(uint32_t size, VkBufferUsageFlags usage,
                      VmaMemoryUsage vma_flags, VkBuffer &buffer,
                      VmaAllocation &allocation) const;
-
   ~VulkanDriver();
 
   // global vulkan
@@ -185,6 +183,7 @@ class VulkanDriver {
     delete singleton_driver;
     singleton_driver = nullptr;
   }
+
 };
 
 }  // namespace rdc
