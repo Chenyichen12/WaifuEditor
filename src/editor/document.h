@@ -17,6 +17,7 @@ class Document {
  public:
   static std::unique_ptr<Document> LoadFromPath(const std::string &path);
   static std::unique_ptr<Document> LoadFromLayerConfig(const std::string& config_path);
+  Layer* GetRootLayer() { return _doc_root_layer.get(); }
   Document();
   ~Document();
 };

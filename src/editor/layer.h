@@ -1,16 +1,14 @@
 #ifndef EDITOR_LAYER_H_
 #define EDITOR_LAYER_H_
-#include <any>
 #include <cassert>
 #include <cstdint>
 #include <functional>
-#include <memory>
 #include <span>
 #include <string>
 #include <vector>
+#include <glm/vec2.hpp>
 
 #include "editor/types.hpp"
-#include "glm/vec2.hpp"
 #include "tools.hpp"
 
 namespace editor {
@@ -45,7 +43,7 @@ class Layer {
   T* GetLayerData() const {
     assert(_type != kUnknown && "Layer type is unknown");
     assert(_type == T::Type && "Layer type mismatch");
-    return std::any_cast<T*>(_meta_data);
+    return reinterpret_cast<T*>(_meta_data);
   }
   // void SetLayerData(std::unique_ptr<std::any> meta_data);
   void SetOwnerLayerData(void* meta_data, const std::function<void(void*)>& deleter);
@@ -53,10 +51,23 @@ class Layer {
 
   std::string GetLayerName() const { return _layer_name; }
   void SetLayerName(const std::string& name) { _layer_name = name; }
+
+
+  // back translate children
   ~Layer();
 
  private:
   LayerDataType _type = kUnknown;
+};
+
+class LayerIterator {
+  Layer* _root = nullptr;
+  std::vector<Layer*> _stack;
+
+  Layer* operator*() const {
+    return _stack.back();
+  }
+
 };
 
 struct ImageLayerData {

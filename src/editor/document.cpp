@@ -19,6 +19,8 @@ std::unique_ptr<Document> Document::LoadFromLayerConfig(
   auto config_dir = std::filesystem::path(config_path).parent_path();
   auto result = std::make_unique<Document>();
   // root
+
+  result->_file_path = config_path;
   {
     auto root = std::make_unique<Layer>();
     root->SetType(Layer::kDirLayer);

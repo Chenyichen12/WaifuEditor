@@ -15,6 +15,10 @@ void App::AppInitContext() {
     std::abort();
   }
   _gui = std::make_unique<Gui>();
+  _gui->DocumentOpenSignal.connect([this](const std::string& path){
+    auto doc = Document::LoadFromLayerConfig(path);
+    this->OpenDocument(std::move(doc));
+  });
 
   rdc::VulkanDriverConfig config;
   config.initial_height = 600;
