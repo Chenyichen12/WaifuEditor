@@ -4,12 +4,12 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 #include <imgui.h>
+#include <portable-file-dialogs.h>
 
 #include <iostream>
 #include <nlohmann/json.hpp>
 
 #include "document.h"
-#include "imgui_internal.h"
 #include "render_core/vulkan_driver.h"
 #include "tools.hpp"
 
@@ -25,7 +25,6 @@ void Gui::WindowResizeCallback(GLFWwindow *window, int width, int height) {
     driver->MarkSwapchainInvalid();
   }
 }
-
 
 Gui::Gui() {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -81,7 +80,10 @@ Gui::~Gui() {
   ImGui::DestroyContext();
 
   EditorConfig *config = EditorConfig::GetInstance();
-  int win_x; int win_y; int width; int height;
+  int win_x;
+  int win_y;
+  int width;
+  int height;
 
   glfwGetWindowPos(_window, &win_x, &win_y);
   glfwGetWindowSize(_window, &width, &height);
@@ -120,12 +122,32 @@ void Gui::TickGui() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::Begin(main_window_name, nullptr, window_flags);
     ImGui::PopStyleVar();
+
+    
+    // meau
+    if (ImGui::BeginMainMenuBar()) {
+      if (ImGui::BeginMenu(WaifuTr("File"))) {
+        if (ImGui::MenuItem(WaifuTr("Open"), "Ctrl+O")) {
+          // open file dialog
+          auto file = pfd::open_file(WaifuTr("Open Project"), "",
+                                     {"Project File", "*.json"});
+          auto result = file.result();
+          if (!result.empty()) {
+            DocumentOpenSignal(result[0]);
+          }
+        }
+        ImGui::EndMenu();
+      }
+
+      ImGui::EndMainMenuBar();
+    }
+
     ImGuiID dockspace_id = ImGui::GetID(main_window_name);
     ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f),
                      ImGuiDockNodeFlags_PassthruCentralNode);
     {
       ImGui::Begin("Layer panel");
-      
+
       ImGui::End();
     }
     ImGui::End();

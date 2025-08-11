@@ -49,6 +49,7 @@ def generate_pixel_layers_meta(layers: List[PixelLayer], pev: Optional[Dict[str,
     meta['layers'] = []
     for layer in layers:
         layer_meta = {
+            'name': layer.name.strip().replace('\x00', ""),
             'path': layer.name.strip().replace('\x00', "") + '.png',
             'vertices': generate_layer_points(layer),
             'width': layer.width,

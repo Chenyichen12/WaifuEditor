@@ -24,6 +24,7 @@ class Gui {
 
   // signals
   sigslot::signal<int, int> WindowResizeSignal;
+  sigslot::signal<const std::string&> DocumentOpenSignal;
 };
 }  // namespace editor
 

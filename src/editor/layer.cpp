@@ -1,12 +1,14 @@
 #include "layer.h"
 
+#include <any>
 #include <memory>
-
 
 namespace editor {
 
-Layer::Layer() : _meta_data(nullptr, [](void*) {}) {
-    
+Layer::Layer() = default;
+Layer::Layer(const std::string& layer_name, LayerDataType data_type) {
+  _layer_name = layer_name;
+  _type = data_type;
 }
 
 bool Layer::HasChild() const {
@@ -22,9 +24,13 @@ std::span<Layer*> Layer::GetChild() {
   assert(HasChild() && "Layer does not have child");
   return _child;
 }
-
-void Layer::SetLayerData(std::unique_ptr<void*, void (*)(void*)> data) {
-  _meta_data = std::move(data);
+void Layer::SetOwnerLayerData(void* meta_data,
+                              const std::function<void(void*)>& deleter) {
+  if (_meta_data_deleter) {
+    _meta_data_deleter(_meta_data);
+  }
+  _meta_data = meta_data;
+  _meta_data_deleter = deleter;
 }
 
 Layer::~Layer() {

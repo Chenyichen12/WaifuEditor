@@ -1,20 +1,24 @@
 #ifndef EDITOR_LAYER_H_
 #define EDITOR_LAYER_H_
+#include <any>
 #include <cassert>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
 #include <vector>
 
 #include "editor/types.hpp"
+#include "glm/vec2.hpp"
 #include "tools.hpp"
 
 namespace editor {
 
 class Layer {
   std::vector<Layer*> _child;
-  std::unique_ptr<void*, void (*)(void*)> _meta_data;
+  void* _meta_data = nullptr;
+  std::function<void(void*)> _meta_data_deleter = [](void* ptr) { free(ptr); };
   std::string _layer_name;
 
  public:
@@ -26,6 +30,7 @@ class Layer {
   };
 
   Layer();
+  Layer(const std::string& layer_name, LayerDataType data_type);
   LayerDataType GetType() const { return _type; }
   void SetType(LayerDataType type) { _type = type; }
 
@@ -40,9 +45,11 @@ class Layer {
   T* GetLayerData() const {
     assert(_type != kUnknown && "Layer type is unknown");
     assert(_type == T::Type && "Layer type mismatch");
-    return static_cast<T*>(_meta_data.get());
+    return std::any_cast<T*>(_meta_data);
   }
-  void SetLayerData(std::unique_ptr<void*, void (*)(void*)> data);
+  // void SetLayerData(std::unique_ptr<std::any> meta_data);
+  void SetOwnerLayerData(void* meta_data, const std::function<void(void*)>& deleter);
+
 
   std::string GetLayerName() const { return _layer_name; }
   void SetLayerName(const std::string& name) { _layer_name = name; }
@@ -56,6 +63,11 @@ struct ImageLayerData {
   static constexpr Layer::LayerDataType Type = Layer::kImageLayer;
   CPUImage* image = nullptr;
   Property<bool> is_visible{true};
+
+  std::vector<glm::vec2> points;
+  std::vector<glm::vec2> uvs;
+  std::vector<uint32_t> indices;
+
   ~ImageLayerData() = default;
 };
 
