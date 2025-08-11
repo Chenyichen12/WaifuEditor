@@ -4,13 +4,19 @@
 #include <string>
 
 #include "tools.hpp"
-
+#include "layer.h"
 namespace editor {
+
+
 class Document {
   std::string _file_path;
+  std::unique_ptr<Layer> _doc_root_layer;
 
  public:
   static std::unique_ptr<Document> LoadFromPath(const std::string &path);
+  static std::unique_ptr<Document> LoadFromLayerConfig(const std::string& config_path);
+  Document();
+  ~Document();
 };
 
 class EditorConfig : public NoCopyable {
@@ -22,10 +28,10 @@ class EditorConfig : public NoCopyable {
     return &instance;
   }
 
-  Property<int> LastTimeWinX = 0;
-  Property<int> LastTimeWinY = 0;
-  Property<int> LastTimeWinWidth = 800;
-  Property<int> LastTimeWinHeight = 600;
+  Property<int> LastTimeWinX {0};
+  Property<int> LastTimeWinY {0};
+  Property<int> LastTimeWinWidth {800};
+  Property<int> LastTimeWinHeight {600};
 
   void SaveConfig() const;
 };

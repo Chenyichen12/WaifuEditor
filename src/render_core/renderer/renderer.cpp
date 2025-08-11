@@ -1,12 +1,7 @@
 #include "renderer.h"
-
-#include <array>
 #include <memory>
 #include <vector>
 
-#include "backends/imgui_impl_vulkan.h"
-#include "render_core/canvas_sd.gen.h"
-#include "imgui.h"
 #include "vulkan/vulkan_core.h"
 #include "render_core/vulkan_driver.h"
 

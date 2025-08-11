@@ -46,7 +46,7 @@ const char *WaifuTr(const char *value) {
 template <typename ValueType>
 class Property {
  public:
-  Property(ValueType value, std::function<void(ValueType)> setter = nullptr,
+  explicit Property(ValueType value, std::function<void(ValueType)> setter = nullptr,
            std::function<ValueType()> getter = nullptr)
       : _value(value), _setter(setter), _getter(getter) {}
   explicit Property() = default;
