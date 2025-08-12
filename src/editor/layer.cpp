@@ -39,4 +39,35 @@ Layer::~Layer() {
   }
   _child.clear();
 }
+LayerIterator::LayerIterator(Layer* root) {
+  _root = root;
+  if (!_root) {
+    return;
+  }
+  _stack.push_back({.layer = _root, .depth = 0});
+}
+const LayerIterator::Element& LayerIterator::operator*() const {
+  return _stack.back();
+}
+LayerIterator& LayerIterator::operator++() {
+  if (_stack.empty()) {
+    return *this;
+  }
+  auto& current = _stack.back();
+  _stack.pop_back();
+  if (current.layer->HasChild()) {
+    for (auto* child : current.layer->GetChild()) {
+      _stack.push_back({.layer = child, .depth = current.depth + 1});
+    }
+  }
+
+  return *this;
+}
+bool LayerIterator::operator!=(const LayerIterator& other) const {
+  return !_stack.empty();
+}
+LayerIterator LayerIterator::begin() { return LayerIterator(_root); }
+LayerIterator LayerIterator::end() {
+  return LayerIterator(nullptr);
+}
 }  // namespace editor

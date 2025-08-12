@@ -3,10 +3,10 @@
 #include <cassert>
 #include <cstdint>
 #include <functional>
+#include <glm/vec2.hpp>
 #include <span>
 #include <string>
 #include <vector>
-#include <glm/vec2.hpp>
 
 #include "editor/types.hpp"
 #include "tools.hpp"
@@ -61,13 +61,23 @@ class Layer {
 };
 
 class LayerIterator {
+
   Layer* _root = nullptr;
-  std::vector<Layer*> _stack;
+public:
+  LayerIterator(Layer* root);
+  struct Element {
+    Layer* layer;
+    size_t depth;
+  };
+  const Element& operator*() const;
+  LayerIterator& operator++();
 
-  Layer* operator*() const {
-    return _stack.back();
-  }
+  bool operator!=(const LayerIterator&) const;
 
+  LayerIterator begin();
+  LayerIterator end();
+private:
+  std::vector<Element> _stack;
 };
 
 struct ImageLayerData {

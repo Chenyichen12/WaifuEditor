@@ -71,7 +71,10 @@ std::unique_ptr<Document> Document::LoadFromLayerConfig(
     result->_doc_root_layer->AddChild(doc_layer);
     result->_images_container.push_back(std::move(image));
   }
-
+  {
+    result->_canvas_size.x = layer_config["canvas"]["width"].get<int>();
+    result->_canvas_size.y = layer_config["canvas"]["height"].get<int>();
+  }
   return result;
 }
 Document::Document() = default;

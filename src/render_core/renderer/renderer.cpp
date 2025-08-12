@@ -36,6 +36,9 @@ ApplicationRenderer::ApplicationRenderer() {
                                      nullptr, &_graphics_finished_semaphore),
                    "Failed to create graphics finished semaphore");
   }
+  {
+    _app_resource_manager = std::make_unique<RenderResourceManager>();
+  }
 }
 ApplicationRenderer::~ApplicationRenderer() {
   auto* driver = VulkanDriver::GetSingleton();

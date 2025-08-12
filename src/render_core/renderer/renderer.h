@@ -5,7 +5,6 @@
 #include "ui_renderer.h"
 namespace rdc {
 
-
 class ApplicationRenderer {
   int _window_width = 800;
   int _window_height = 600;
@@ -16,6 +15,8 @@ class ApplicationRenderer {
   VkSemaphore _swapchain_image_available_semaphore = VK_NULL_HANDLE;
   VkSemaphore _graphics_finished_semaphore = VK_NULL_HANDLE;
 
+  std::unique_ptr<RenderResourceManager> _app_resource_manager;
+
  public:
   ApplicationRenderer();
   ~ApplicationRenderer();
@@ -23,6 +24,9 @@ class ApplicationRenderer {
   void Render();
   ModelRenderer *GetModelRenderer() const { return _model_renderer.get(); }
   UiRenderer *GetUiRenderer() const { return _ui_renderer.get(); }
+  RenderResourceManager *GetResourceManager() const {
+    return _app_resource_manager.get();
+  }
 };
 
 }  // namespace rdc
