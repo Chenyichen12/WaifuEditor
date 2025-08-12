@@ -46,13 +46,24 @@ void App::AppInitContext() {
 App::App(int argc, char **argv) {
   WaifuUnused(argc, argv);
   AppInitContext();
+  EditorConfig *config = EditorConfig::GetInstance();
+  if (!config->LastTimeDocumentPath().empty()) {
+    auto doc = Document::LoadFromLayerConfig(config->LastTimeDocumentPath());
+    if (doc) {
+      OpenDocument(std::move(doc));
+    } else {
+      std::cerr << "Failed to load document from path: "
+                << config->LastTimeDocumentPath() << "\n";
+    }
+  }
 }
 void App::OpenDocument(std::unique_ptr<Document> doc) {
   _current_document = std::move(doc);
 
   // layers
   auto *root_layer = _current_document->GetRootLayer();
-  for (auto it = root_layer->BeginFrontIter(); it != root_layer->EndFrontIter(); ++it) {
+  for (auto it = root_layer->BeginFrontIter(); it != root_layer->EndFrontIter();
+       ++it) {
     auto *layer = (*it).layer;
     if (layer->GetType() == Layer::kImageLayer) {
       // handle image
@@ -81,8 +92,13 @@ void App::OpenDocument(std::unique_ptr<Document> doc) {
     }
   }
   auto model_renderer = _renderer->GetModelRenderer();
-  model_renderer->SetCanvasSize(_current_document->GetCanvasSize().x, _current_document->GetCanvasSize().y);
+  model_renderer->SetCanvasSize(_current_document->GetCanvasSize().x,
+                                _current_document->GetCanvasSize().y);
   model_renderer->AutoCenterCanvas();
+
+  // add last time config
+  EditorConfig *config = EditorConfig::GetInstance();
+  config->LastTimeDocumentPath = _current_document->GetFilePath();
 }
 
 void App::Exec() {

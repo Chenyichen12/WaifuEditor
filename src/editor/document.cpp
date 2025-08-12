@@ -10,7 +10,6 @@
 #include "layer.h"
 
 namespace editor {
-
 std::unique_ptr<Document> Document::LoadFromPath(const std::string &path) {
   return nullptr;
 }
@@ -79,7 +78,8 @@ std::unique_ptr<Document> Document::LoadFromLayerConfig(
 }
 Document::Document() = default;
 Document::~Document() = default;
-
+}  // namespace editor
+namespace editor {
 EditorConfig::EditorConfig() {
   std::ifstream config_file("editor_config.json");
   if (config_file.is_open()) {
@@ -89,6 +89,8 @@ EditorConfig::EditorConfig() {
     LastTimeWinY = config_json["last_time_win_y"].get<int>();
     LastTimeWinWidth = config_json["last_time_win_width"].get<int>();
     LastTimeWinHeight = config_json["last_time_win_height"].get<int>();
+    LastTimeDocumentPath =
+        config_json["last_time_document_path"].get<std::string>();
   }
 }
 
@@ -100,6 +102,7 @@ void EditorConfig::SaveConfig() const {
     config_json["last_time_win_y"] = LastTimeWinY();
     config_json["last_time_win_width"] = LastTimeWinWidth();
     config_json["last_time_win_height"] = LastTimeWinHeight();
+    config_json["last_time_document_path"] = LastTimeDocumentPath();
     config_file << config_json.dump(4);
   }
 }

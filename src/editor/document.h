@@ -20,6 +20,7 @@ class Document {
       const std::string& config_path);
   Layer* GetRootLayer() const { return _doc_root_layer.get(); }
   glm::vec2 GetCanvasSize() const { return _canvas_size; }
+  std::string GetFilePath() const { return _file_path; }
   Document();
   ~Document();
 };
@@ -38,6 +39,8 @@ class EditorConfig : public NoCopyable {
   Property<int> LastTimeWinY{0};
   Property<int> LastTimeWinWidth{800};
   Property<int> LastTimeWinHeight{600};
+
+  Property<std::string> LastTimeDocumentPath{""};
 
   void SaveConfig() const;
 };
