@@ -52,9 +52,7 @@ void App::OpenDocument(std::unique_ptr<Document> doc) {
 
   // layers
   auto *root_layer = _current_document->GetRootLayer();
-  auto it = LayerIterator(root_layer);
-  auto end_it = it.end();
-  for (; it != end_it; ++it) {
+  for (auto it = root_layer->BeginFrontIter(); it != root_layer->EndFrontIter(); ++it) {
     auto *layer = (*it).layer;
     if (layer->GetType() == Layer::kImageLayer) {
       // handle image
@@ -64,13 +62,14 @@ void App::OpenDocument(std::unique_ptr<Document> doc) {
       rdc::Layer2dResource::ImageConfig image_config;
       image_config.pimage = image_data->image;
       std::vector<rdc::ModelVertex> vertices;
+      vertices.resize(image_data->points.size());
 
       {
         for (size_t i = 0; i < image_data->points.size(); ++i) {
           rdc::ModelVertex vertex;
           vertex.position = image_data->points[i];
           vertex.uv = image_data->uvs[i];
-          vertices.push_back(vertex);
+          vertices[i] = vertex;
         }
       }
 

@@ -39,35 +39,43 @@ Layer::~Layer() {
   }
   _child.clear();
 }
-LayerIterator::LayerIterator(Layer* root) {
+Layer::LayerIterator::LayerIterator(Layer* root, bool front_iter) {
   _root = root;
-  if (!_root) {
-    return;
+  if (_root) {
+    _stack.push_back({.layer = _root, .depth = 0});
   }
-  _stack.push_back({.layer = _root, .depth = 0});
+  _front_iter = front_iter;
 }
-const LayerIterator::Element& LayerIterator::operator*() const {
+const Layer::LayerIterator::Element& Layer::LayerIterator::get() const {
   return _stack.back();
 }
-LayerIterator& LayerIterator::operator++() {
+Layer::LayerIterator& Layer::LayerIterator::operator++() {
   if (_stack.empty()) {
     return *this;
   }
-  auto& current = _stack.back();
+  auto current = _stack.back();
   _stack.pop_back();
   if (current.layer->HasChild()) {
-    for (auto* child : current.layer->GetChild()) {
+    for (int i = 0; i < current.layer->GetChild().size(); ++i) {
+      auto idx = 0;
+      if (_front_iter) {
+        idx = current.layer->GetChild().size() - 1 - i;
+      }
+      auto* child = current.layer->GetChild()[idx];
       _stack.push_back({.layer = child, .depth = current.depth + 1});
     }
   }
 
   return *this;
 }
-bool LayerIterator::operator!=(const LayerIterator& other) const {
-  return !_stack.empty();
+bool Layer::LayerIterator::operator!=(const LayerIterator& other) const {
+  if (_stack.empty() && other._stack.empty()) {
+    return false;
+  }
+  if (_stack.empty() || other._stack.empty()) {
+    return true;
+  }
+  return get().layer != other.get().layer;
 }
-LayerIterator LayerIterator::begin() { return LayerIterator(_root); }
-LayerIterator LayerIterator::end() {
-  return LayerIterator(nullptr);
-}
+
 }  // namespace editor

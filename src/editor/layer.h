@@ -46,38 +46,42 @@ class Layer {
     return reinterpret_cast<T*>(_meta_data);
   }
   // void SetLayerData(std::unique_ptr<std::any> meta_data);
-  void SetOwnerLayerData(void* meta_data, const std::function<void(void*)>& deleter);
-
+  void SetOwnerLayerData(void* meta_data,
+                         const std::function<void(void*)>& deleter);
 
   std::string GetLayerName() const { return _layer_name; }
   void SetLayerName(const std::string& name) { _layer_name = name; }
 
-
   // back translate children
   ~Layer();
 
+  class LayerIterator {
+    Layer* _root = nullptr;
+
+   public:
+    explicit LayerIterator(Layer* root, bool front_iter = true);
+    struct Element {
+      Layer* layer;
+      size_t depth;
+    };
+    const Element& operator*() const { return get(); };
+    const Element& get() const;
+    LayerIterator& operator++();
+
+    bool operator!=(const LayerIterator& other) const;
+
+   private:
+    std::vector<Element> _stack;
+    bool _front_iter = true;  // true for front, false for back
+  };
+  LayerIterator BeginBackIter() { return LayerIterator(this, false); }
+  LayerIterator EndBackIter() { return LayerIterator(nullptr); }
+
+  LayerIterator BeginFrontIter() { return LayerIterator(this); }
+  LayerIterator EndFrontIter() { return LayerIterator(nullptr); }
+
  private:
   LayerDataType _type = kUnknown;
-};
-
-class LayerIterator {
-
-  Layer* _root = nullptr;
-public:
-  LayerIterator(Layer* root);
-  struct Element {
-    Layer* layer;
-    size_t depth;
-  };
-  const Element& operator*() const;
-  LayerIterator& operator++();
-
-  bool operator!=(const LayerIterator&) const;
-
-  LayerIterator begin();
-  LayerIterator end();
-private:
-  std::vector<Element> _stack;
 };
 
 struct ImageLayerData {

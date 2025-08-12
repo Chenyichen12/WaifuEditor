@@ -86,14 +86,27 @@ class Property {
 
 template <typename Value>
 class LazyVector {
+  std::function<Value(int index)> _load_func;
+  size_t _size = 0;
+
  public:
-  std::function<Value(int index)> LoadFunc;
-  int Size = 0;
+
+  LazyVector(std::function<Value(int index)> load_func, int size)
+      : _load_func(load_func), _size(size) {}
+  LazyVector() {
+    _load_func = [](int) {};
+  }
+
+  explicit LazyVector(const std::vector<Value> &vector) {
+    _load_func = [vector](int index) { return vector[index]; };
+    _size = vector.size();
+  }
+  size_t size() const { return _size; }
   // support enhance for
   class Iterator {
    public:
-    Iterator(LazyVector *vec, int index) : _vec(vec), _index(index) {}
-    Value operator*() const { return _vec->LoadFunc(_index); }
+    Iterator(LazyVector *vec, const int index) : _vec(vec), _index(index) {}
+    Value operator*() const { return _vec->_load_func(_index); }
     Iterator &operator++() {
       ++_index;
       return *this;
@@ -108,7 +121,7 @@ class LazyVector {
   };
 
   Iterator begin() { return Iterator(this, 0); }
-  Iterator end() { return Iterator(this, Size); }
+  Iterator end() { return Iterator(this, _size); }
 };
 
 #endif  // TOOLS_HPP_
