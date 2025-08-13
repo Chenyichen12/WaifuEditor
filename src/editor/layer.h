@@ -86,6 +86,8 @@ class Layer {
 
 struct ImageLayerData {
   static constexpr Layer::LayerDataType Type = Layer::kImageLayer;
+  // the relative path to the project file
+  std::string origin_path;
   CPUImage* image = nullptr;
   Property<bool> is_visible{true};
 

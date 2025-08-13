@@ -21,6 +21,8 @@ class Document {
   Layer* GetRootLayer() const { return _doc_root_layer.get(); }
   glm::vec2 GetCanvasSize() const { return _canvas_size; }
   std::string GetFilePath() const { return _file_path; }
+
+  bool SaveProject() const;
   Document();
   ~Document();
 };

@@ -46,6 +46,7 @@ std::unique_ptr<Document> Document::LoadFromLayerConfig(
     auto *doc_layer = new Layer(layer_name, Layer::kImageLayer);
     auto *meta_data = new ImageLayerData();
     meta_data->image = image.get();
+    meta_data->origin_path = file_path;
     meta_data->is_visible = true;
 
     auto vertex_struct = layer["vertices"];
@@ -75,6 +76,28 @@ std::unique_ptr<Document> Document::LoadFromLayerConfig(
     result->_canvas_size.y = layer_config["canvas"]["height"].get<int>();
   }
   return result;
+}
+bool Document::SaveProject() const {
+  std::ofstream proj_file(_file_path);
+  if (proj_file.is_open()) {
+    return false;
+  }
+  nlohmann::json proj_config;
+
+  // board part
+  {
+    proj_config["board"]["width"] = static_cast<int>(_canvas_size.x);
+    proj_config["board"]["height"] = static_cast<int>(_canvas_size.y);
+    for(auto it = _doc_root_layer->BeginFrontIter(); it != _doc_root_layer->EndFrontIter(); ++it) {
+      auto element = it.get();
+      
+
+    }
+
+
+    // proj_config["board"]["layer"]
+  }
+  return true;
 }
 Document::Document() = default;
 Document::~Document() = default;

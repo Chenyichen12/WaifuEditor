@@ -73,15 +73,17 @@ void App::OpenDocument(std::unique_ptr<Document> doc) {
       rdc::Layer2dResource::ImageConfig image_config;
       image_config.pimage = image_data->image;
       std::vector<rdc::ModelVertex> vertices;
-      vertices.resize(image_data->points.size());
 
       {
-        for (size_t i = 0; i < image_data->points.size(); ++i) {
-          rdc::ModelVertex vertex;
-          vertex.position = image_data->points[i];
-          vertex.uv = image_data->uvs[i];
-          vertices[i] = vertex;
-        }
+        LazyVector<rdc::ModelVertex> lazy_vertices;
+        lazy_vertices.Resize(image_data->points.size())
+            .SetFunc([image_data](int index) {
+              rdc::ModelVertex result;
+              result.position = image_data->points[index];
+              result.uv = image_data->uvs[index];
+              return result;
+            });
+        vertices = lazy_vertices.ToVector();
       }
 
       image_config.vertices = vertices;
@@ -91,7 +93,7 @@ void App::OpenDocument(std::unique_ptr<Document> doc) {
       _renderer->GetResourceManager()->AddResource(std::move(layer_resource));
     }
   }
-  auto model_renderer = _renderer->GetModelRenderer();
+  auto* model_renderer = _renderer->GetModelRenderer();
   model_renderer->SetCanvasSize(_current_document->GetCanvasSize().x,
                                 _current_document->GetCanvasSize().y);
   model_renderer->AutoCenterCanvas();

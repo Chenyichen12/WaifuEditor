@@ -90,11 +90,10 @@ class LazyVector {
   size_t _size = 0;
 
  public:
-
   LazyVector(std::function<Value(int index)> load_func, int size)
       : _load_func(load_func), _size(size) {}
   LazyVector() {
-    _load_func = [](int) {};
+    _load_func = nullptr;
   }
 
   explicit LazyVector(const std::vector<Value> &vector) {
@@ -102,6 +101,14 @@ class LazyVector {
     _size = vector.size();
   }
   size_t size() const { return _size; }
+  LazyVector &SetFunc(std::function<Value(int index)> load_func) {
+    _load_func = load_func;
+    return *this;
+  }
+  LazyVector &Resize(const int size) {
+    _size = size;
+    return *this;
+  }
   // support enhance for
   class Iterator {
    public:
@@ -122,6 +129,15 @@ class LazyVector {
 
   Iterator begin() { return Iterator(this, 0); }
   Iterator end() { return Iterator(this, _size); }
+  std::vector<Value> ToVector() const {
+    assert(_load_func != nullptr);
+    std::vector<Value> result(_size);
+    for (size_t i = 0; i < _size; ++i) {
+      result[i] = _load_func(i);
+    }
+
+    return result;
+  }
 };
 
 #endif  // TOOLS_HPP_
