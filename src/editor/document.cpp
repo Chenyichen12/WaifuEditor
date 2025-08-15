@@ -1,17 +1,95 @@
 #include "document.h"
 
-#include <any>
-#include <cstddef>
 #include <fstream>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <stack>
 
 #include "editor/types.hpp"
 #include "layer.h"
 
 namespace editor {
 std::unique_ptr<Document> Document::LoadFromPath(const std::string &path) {
-  return nullptr;
+  std::unique_ptr<Document> result = std::make_unique<Document>();
+  result->_file_path = path;
+  std::ifstream proj_file(path);
+  if (!proj_file.is_open()) {
+    return nullptr;
+  }
+  nlohmann::json proj_json;
+  proj_file >> proj_json;
+
+  // image
+  {
+    for (const auto &image_json : proj_json["images"]) {
+      DocumentImage doc_image;
+      doc_image.image_id = image_json["id"].get<int>();
+      doc_image.rel_path = image_json["rel_path"].get<std::string>();
+      // load image data
+      std::filesystem::path image_path =
+          std::filesystem::path(result->_file_path).parent_path();
+      image_path = image_path / doc_image.rel_path;
+      auto image = std::make_unique<CPUImage>();
+      image->LoadFromFile(image_path.string());
+      if (!image->IsValid()) {
+        return nullptr;  // Failed to load image
+      }
+      doc_image.image = std::move(image);
+      result->_images_container.push_back(std::move(doc_image));
+    }
+  }
+
+  // board
+  {
+    result->_canvas_size.x = proj_json["board"]["width"];
+    result->_canvas_size.y = proj_json["board"]["height"];
+    {
+      auto root =
+          std::make_unique<Layer>("Root", std::make_unique<DirLayerData>());
+      std::stack<std::pair<Layer *, int>> layer_stack;
+      std::pair<Layer *, int> pre_layer = {root.get(), -1};
+
+      for (const auto &layer : proj_json["board"]["layer"]) {
+        auto new_layer = new Layer();
+        int depth = layer["depth"];
+        new_layer->SetLayerName(layer["name"].get<std::string>());
+        auto type = static_cast<LayerDataType>(layer["type"].get<int>());
+        auto meta = layer["meta"];
+        auto new_layer_data = LayerData::Create(type, meta);
+        if (new_layer_data->Type() == kImageLayer) {
+          auto image_data = static_cast<ImageLayerData *>(new_layer_data.get());
+          image_data->image =
+              result->_images_container[image_data->image_id].image.get();
+        }
+
+        new_layer->SetLayerData(std::move(new_layer_data));
+        // add child
+        if (pre_layer.second < depth) {
+          // deeper
+          layer_stack.push(pre_layer);
+          pre_layer.first->AddChild(new_layer);
+          pre_layer = {new_layer, depth};
+        }
+        else if (pre_layer.second == depth) {
+          // same depth
+          layer_stack.top().first->AddChild(new_layer);
+          pre_layer.first = new_layer;
+        }
+        else if (pre_layer.second > depth) {
+          // shallower
+          while (!layer_stack.empty() && pre_layer.second > depth) {
+            pre_layer = layer_stack.top();
+            layer_stack.pop();
+          }
+          layer_stack.top().first->AddChild(new_layer);
+          pre_layer = {new_layer, depth};
+        }
+      }
+      // set root
+      result->_doc_root_layer = std::move(root);
+    }
+  }
+  return result;
 }
 std::unique_ptr<Document> Document::LoadFromLayerConfig(
     const std::string &config_path) {
@@ -19,11 +97,10 @@ std::unique_ptr<Document> Document::LoadFromLayerConfig(
   auto result = std::make_unique<Document>();
   // root
 
-  result->_file_path = config_path;
+  // result->_file_path = config_path;
   {
-    auto root = std::make_unique<Layer>();
-    root->SetType(Layer::kDirLayer);
-    root->SetLayerName("Root");
+    auto root =
+        std::make_unique<Layer>("Root", std::make_unique<DirLayerData>());
     result->_doc_root_layer = std::move(root);
   }
 
@@ -43,10 +120,11 @@ std::unique_ptr<Document> Document::LoadFromLayerConfig(
 
     // doc layer build
     std::string layer_name = layer["name"];
-    auto *doc_layer = new Layer(layer_name, Layer::kImageLayer);
-    auto *meta_data = new ImageLayerData();
+    auto *doc_layer = new Layer();
+    doc_layer->SetLayerName(layer_name);
+    auto meta_data = std::make_unique<ImageLayerData>();
     meta_data->image = image.get();
-    meta_data->origin_path = file_path;
+    meta_data->image_id = result->_images_container.size();
     meta_data->is_visible = true;
 
     auto vertex_struct = layer["vertices"];
@@ -64,39 +142,70 @@ std::unique_ptr<Document> Document::LoadFromLayerConfig(
       meta_data->uvs.push_back(pos_uv);
     }
     meta_data->indices = std::move(index_array);
-    doc_layer->SetOwnerLayerData(meta_data, [](void *ptr) {
-      delete static_cast<ImageLayerData *>(ptr);
-    });
+    doc_layer->SetLayerData(std::move(meta_data));
 
     result->_doc_root_layer->AddChild(doc_layer);
-    result->_images_container.push_back(std::move(image));
+    // result->_images_container.push_back(std::move(image));
+
+    DocumentImage doc_image;
+    doc_image.image = std::move(image);
+    doc_image.image_id = result->_images_container.size();
+    doc_image.rel_path =
+        std::filesystem::relative(file_path, config_dir).string();
+    result->_images_container.push_back(std::move(doc_image));
   }
   {
     result->_canvas_size.x = layer_config["canvas"]["width"].get<int>();
     result->_canvas_size.y = layer_config["canvas"]["height"].get<int>();
   }
+
   return result;
 }
 bool Document::SaveProject() const {
+  // if not create file, create it
   std::ofstream proj_file(_file_path);
-  if (proj_file.is_open()) {
+  if (!proj_file.is_open()) {
     return false;
   }
   nlohmann::json proj_config;
+
+  // image part
+  {
+    for (const auto &doc_image : _images_container) {
+      nlohmann::json image_json;
+      image_json["id"] = doc_image.image_id;
+      image_json["rel_path"] = doc_image.rel_path;
+      // save image data
+      std::filesystem::path path =
+          std::filesystem::path(_file_path).parent_path();
+      path = path / doc_image.rel_path;
+      if (!std::filesystem::exists(path)) {
+        doc_image.image->SaveToFile(path.string());
+      }
+
+      proj_config["images"].push_back(image_json);
+    }
+  }
 
   // board part
   {
     proj_config["board"]["width"] = static_cast<int>(_canvas_size.x);
     proj_config["board"]["height"] = static_cast<int>(_canvas_size.y);
-    for(auto it = _doc_root_layer->BeginFrontIter(); it != _doc_root_layer->EndFrontIter(); ++it) {
+
+    for (auto it = _doc_root_layer->BeginFrontIter();
+         it != _doc_root_layer->EndFrontIter(); ++it) {
+      nlohmann::json layer_json;
       auto element = it.get();
-      
-
+      int depth = element.depth;
+      layer_json["name"] = element.layer->GetLayerName();
+      layer_json["depth"] = depth;
+      layer_json["type"] = element.layer->GetType();
+      layer_json["meta"] = nlohmann::json::object();
+      element.layer->GetLayerData()->Serialize(layer_json["meta"]);
+      proj_config["board"]["layer"].push_back(layer_json);
     }
-
-
-    // proj_config["board"]["layer"]
   }
+  proj_file << proj_config.dump(4);
   return true;
 }
 Document::Document() = default;

@@ -1,36 +1,46 @@
 #ifndef EDITOR_LAYER_H_
 #define EDITOR_LAYER_H_
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <glm/vec2.hpp>
+#include <memory>
 #include <span>
 #include <string>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 #include "editor/types.hpp"
 #include "tools.hpp"
 
 namespace editor {
 
+enum LayerDataType : uint8_t {
+  kImageLayer,
+  kDirLayer,
+  kMorpherLayer,
+  kUnknown,
+};
+
+class LayerData {
+ public:
+  virtual LayerDataType Type() const = 0;
+  virtual ~LayerData() = default;
+  virtual void Serialize(nlohmann::json& json) const = 0;
+  virtual void Deserialize(const nlohmann::json& json) = 0;
+
+  static std::unique_ptr<LayerData> Create(LayerDataType type, const nlohmann::json& json);
+};
+
 class Layer {
   std::vector<Layer*> _child;
-  void* _meta_data = nullptr;
-  std::function<void(void*)> _meta_data_deleter = [](void* ptr) { free(ptr); };
+  std::unique_ptr<LayerData> _meta_data = nullptr;
   std::string _layer_name;
 
  public:
-  enum LayerDataType : uint8_t {
-    kImageLayer,
-    kDirLayer,
-    kMorpherLayer,
-    kUnknown,
-  };
-
   Layer();
-  Layer(const std::string& layer_name, LayerDataType data_type);
-  LayerDataType GetType() const { return _type; }
-  void SetType(LayerDataType type) { _type = type; }
+  Layer(const std::string& layer_name, std::unique_ptr<LayerData> meta_data);
+  LayerDataType GetType() const { return _meta_data->Type(); }
 
   bool HasChild() const;
   std::span<Layer* const> GetChild() const;
@@ -39,16 +49,10 @@ class Layer {
     assert(HasChild() && "Layer does not support child");
     _child.push_back(child);
   }
+  LayerData* GetLayerData() const { return _meta_data.get(); }
   template <typename T>
-  T* GetLayerData() const {
-    assert(_type != kUnknown && "Layer type is unknown");
-    assert(_type == T::Type && "Layer type mismatch");
-    return reinterpret_cast<T*>(_meta_data);
-  }
-  // void SetLayerData(std::unique_ptr<std::any> meta_data);
-  void SetOwnerLayerData(void* meta_data,
-                         const std::function<void(void*)>& deleter);
-
+  T* GetLayerData() const { return static_cast<T*>(_meta_data.get()); }
+  void SetLayerData(std::unique_ptr<LayerData> meta_data);
   std::string GetLayerName() const { return _layer_name; }
   void SetLayerName(const std::string& name) { _layer_name = name; }
 
@@ -81,13 +85,19 @@ class Layer {
   LayerIterator EndFrontIter() { return LayerIterator(nullptr); }
 
  private:
-  LayerDataType _type = kUnknown;
 };
 
-struct ImageLayerData {
-  static constexpr Layer::LayerDataType Type = Layer::kImageLayer;
+
+struct DirLayerData : public LayerData{
+  DirLayerData() = default;
+  LayerDataType Type() const override { return kDirLayer; }
+  void Serialize(nlohmann::json& json) const override{}
+  void Deserialize(const nlohmann::json& json) override{}
+};
+
+struct ImageLayerData : public LayerData {
   // the relative path to the project file
-  std::string origin_path;
+  int image_id = -1;
   CPUImage* image = nullptr;
   Property<bool> is_visible{true};
 
@@ -95,7 +105,10 @@ struct ImageLayerData {
   std::vector<glm::vec2> uvs;
   std::vector<uint32_t> indices;
 
-  ~ImageLayerData() = default;
+  LayerDataType Type() const override { return kImageLayer; }
+  void Serialize(nlohmann::json& json) const override;
+  void Deserialize(const nlohmann::json& json) override;
+  ~ImageLayerData() override = default;
 };
 
 }  // namespace editor

@@ -2,17 +2,41 @@
 
 #include <any>
 #include <memory>
+#include <vector>
+
+#include "tools.hpp"
 
 namespace editor {
 
+std::unique_ptr<LayerData> LayerData::Create(LayerDataType type,
+                                             const nlohmann::json& json) {
+  std::unique_ptr<LayerData> data;
+  switch (type) {
+    case kImageLayer:
+      data = std::make_unique<ImageLayerData>();
+      data->Deserialize(json);
+      break;
+    case kDirLayer:
+      data = std::make_unique<DirLayerData>();
+      data->Deserialize(json);
+      break;
+    case kMorpherLayer:
+      break;
+    default:
+      assert(false && "Unsupported layer type");
+      break;
+  }
+  return data;
+}
 Layer::Layer() = default;
-Layer::Layer(const std::string& layer_name, LayerDataType data_type) {
+Layer::Layer(const std::string& layer_name,
+             std::unique_ptr<LayerData> meta_data) {
   _layer_name = layer_name;
-  _type = data_type;
+  _meta_data = std::move(meta_data);
 }
 
 bool Layer::HasChild() const {
-  return _type == kDirLayer || _type == kMorpherLayer;
+  return GetType() == kDirLayer || GetType() == kMorpherLayer;
 }
 
 std::span<Layer* const> Layer::GetChild() const {
@@ -24,13 +48,8 @@ std::span<Layer*> Layer::GetChild() {
   assert(HasChild() && "Layer does not have child");
   return _child;
 }
-void Layer::SetOwnerLayerData(void* meta_data,
-                              const std::function<void(void*)>& deleter) {
-  if (_meta_data_deleter) {
-    _meta_data_deleter(_meta_data);
-  }
-  _meta_data = meta_data;
-  _meta_data_deleter = deleter;
+void Layer::SetLayerData(std::unique_ptr<LayerData> meta_data) {
+  _meta_data = std::move(meta_data);
 }
 
 Layer::~Layer() {
@@ -78,4 +97,30 @@ bool Layer::LayerIterator::operator!=(const LayerIterator& other) const {
   return get().layer != other.get().layer;
 }
 
+}  // namespace editor
+
+namespace editor {
+void ImageLayerData::Serialize(nlohmann::json& json) const {
+  json["image_id"] = image_id;
+  json["is_visible"] = is_visible();
+  std::vector<float> tmp_pos(points.size() * 2);
+  std::vector<float> tmp_uv(points.size() * 2);
+  memcpy(tmp_pos.data(), points.data(), points.size() * 2 * sizeof(float));
+  memcpy(tmp_uv.data(), uvs.data(), uvs.size() * 2 * sizeof(float));
+  json["points"] = tmp_pos;
+  json["uv"] = tmp_uv;
+  json["indices"] = indices;
+}
+void ImageLayerData::Deserialize(const nlohmann::json& json) {
+  image_id = json["image_id"].get<int>();
+  is_visible = json["is_visible"].get<bool>();
+  auto points_array = json["points"].get<std::vector<float>>();
+  auto uvs_array = json["uv"].get<std::vector<float>>();
+  points.resize(points_array.size() / 2);
+  uvs.resize(uvs_array.size() / 2);
+  memcpy(points.data(), points_array.data(),
+         points_array.size() * sizeof(float));
+  memcpy(uvs.data(), uvs_array.data(), uvs_array.size() * sizeof(float));
+  indices = json["indices"].get<std::vector<uint32_t>>();
+}
 }  // namespace editor

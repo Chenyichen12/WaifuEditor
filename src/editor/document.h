@@ -9,10 +9,15 @@ namespace editor {
 
 class Document {
   std::string _file_path;
-  std::unique_ptr<Layer> _doc_root_layer;
+  std::unique_ptr<Layer> _doc_root_layer = nullptr;
   glm::vec2 _canvas_size{800, 600};
+  struct DocumentImage {
+    std::string rel_path;
+    std::unique_ptr<CPUImage> image;
+    int image_id;
+  };
 
-  std::vector<std::unique_ptr<CPUImage>> _images_container;
+  std::vector<DocumentImage> _images_container;
 
  public:
   static std::unique_ptr<Document> LoadFromPath(const std::string& path);
@@ -21,6 +26,7 @@ class Document {
   Layer* GetRootLayer() const { return _doc_root_layer.get(); }
   glm::vec2 GetCanvasSize() const { return _canvas_size; }
   std::string GetFilePath() const { return _file_path; }
+  void SetSavePath(const std::string& path) { _file_path = path; }
 
   bool SaveProject() const;
   Document();

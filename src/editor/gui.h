@@ -1,5 +1,6 @@
 #ifndef EDITOR_GUI_H_
 #define EDITOR_GUI_H_
+#include <string>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -21,10 +22,13 @@ class Gui {
   void GetWindowSize(int &width, int &height) const;
   VkResult CreateVulkanSurface(VkInstance instance,
                                VkSurfaceKHR &surface) const;
+  static std::string OpenSaveDialog();
 
   // signals
   sigslot::signal<int, int> WindowResizeSignal;
   sigslot::signal<const std::string&> DocumentOpenSignal;
+  sigslot::signal<const std::string&> DocumentLoadPsdSignal;
+  sigslot::signal<> DocumentSaveSignal;
 };
 }  // namespace editor
 

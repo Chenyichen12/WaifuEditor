@@ -123,18 +123,29 @@ void Gui::TickGui() {
     ImGui::Begin(main_window_name, nullptr, window_flags);
     ImGui::PopStyleVar();
 
-    
     // meau
     if (ImGui::BeginMainMenuBar()) {
       if (ImGui::BeginMenu(WaifuTr("File"))) {
         if (ImGui::MenuItem(WaifuTr("Open"), "Ctrl+O")) {
           // open file dialog
           auto file = pfd::open_file(WaifuTr("Open Project"), "",
-                                     {"Project File", "*.json"});
+                                     {"Project File", "*.wf"});
           auto result = file.result();
           if (!result.empty()) {
             DocumentOpenSignal(result[0]);
           }
+        }
+        if (ImGui::MenuItem(WaifuTr("Load From Psd"))) {
+          auto file = pfd::open_file(WaifuTr("Open Project"), "",
+                                     {"Layer Config", "*.json"});
+          auto result = file.result();
+          if (!result.empty()) {
+            DocumentLoadPsdSignal(result[0]);
+          }
+        }
+
+        if (ImGui::MenuItem(WaifuTr("Save"), "Ctrl+S")) {
+          DocumentSaveSignal();
         }
         ImGui::EndMenu();
       }
@@ -171,6 +182,13 @@ VkResult Gui::CreateVulkanSurface(VkInstance instance,
     return VK_ERROR_INITIALIZATION_FAILED;
   }
   return glfwCreateWindowSurface(instance, _window, nullptr, &surface);
+}
+
+std::string Gui::OpenSaveDialog() {
+  auto file =
+      pfd::save_file(WaifuTr("Save"), "untitled.wf", {"Project File", "*.wf"});
+  auto result = file.result();
+  return result;
 }
 
 }  // namespace editor

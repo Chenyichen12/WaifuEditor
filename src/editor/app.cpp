@@ -15,9 +15,37 @@ void App::AppInitContext() {
     std::abort();
   }
   _gui = std::make_unique<Gui>();
-  _gui->DocumentOpenSignal.connect([this](const std::string &path) {
+  _gui->DocumentLoadPsdSignal.connect([this](const std::string &path) {
     auto doc = Document::LoadFromLayerConfig(path);
+    if (doc) {
+      this->OpenDocument(std::move(doc));
+    } else {
+      std::cerr << "Failed to load document from path: " << path << "\n";
+    }
+  });
+  _gui->DocumentOpenSignal.connect([this](const std::string &path) {
+    auto doc = Document::LoadFromPath(path);
     this->OpenDocument(std::move(doc));
+  });
+  _gui->DocumentSaveSignal.connect([this]() {
+    if (!_current_document) {
+      return;
+    }
+
+    if (_current_document->GetFilePath().empty()) {
+      // open save dialog
+      auto path = Gui::OpenSaveDialog();
+      if (path.empty()) {
+        return;
+      }
+      _current_document->SetSavePath(path);
+    }
+    if (_current_document->SaveProject()) {
+      std::cout << "Document saved successfully to "
+                << _current_document->GetFilePath() << "\n";
+    } else {
+      std::cerr << "Failed to save document.\n";
+    };
   });
 
   rdc::VulkanDriverConfig config;
@@ -48,7 +76,7 @@ App::App(int argc, char **argv) {
   AppInitContext();
   EditorConfig *config = EditorConfig::GetInstance();
   if (!config->LastTimeDocumentPath().empty()) {
-    auto doc = Document::LoadFromLayerConfig(config->LastTimeDocumentPath());
+    auto doc = Document::LoadFromPath(config->LastTimeDocumentPath());
     if (doc) {
       OpenDocument(std::move(doc));
     } else {
@@ -65,7 +93,7 @@ void App::OpenDocument(std::unique_ptr<Document> doc) {
   for (auto it = root_layer->BeginFrontIter(); it != root_layer->EndFrontIter();
        ++it) {
     auto *layer = (*it).layer;
-    if (layer->GetType() == Layer::kImageLayer) {
+    if (layer->GetType() == kImageLayer) {
       // handle image
       auto *image_data = layer->GetLayerData<ImageLayerData>();
 
@@ -93,7 +121,7 @@ void App::OpenDocument(std::unique_ptr<Document> doc) {
       _renderer->GetResourceManager()->AddResource(std::move(layer_resource));
     }
   }
-  auto* model_renderer = _renderer->GetModelRenderer();
+  auto *model_renderer = _renderer->GetModelRenderer();
   model_renderer->SetCanvasSize(_current_document->GetCanvasSize().x,
                                 _current_document->GetCanvasSize().y);
   model_renderer->AutoCenterCanvas();

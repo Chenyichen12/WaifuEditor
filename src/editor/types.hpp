@@ -5,6 +5,7 @@
 #ifndef EDITOR_TYPES_HPP
 #define EDITOR_TYPES_HPP
 #include <stb_image.h>
+#include <stb_image_write.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -32,12 +33,14 @@ class CPUImage {
     };
   }
   CPUImage(CPUImage&& img) noexcept
-      : width(img.width), height(img.height), channels(img.channels), data(img.data) {
+      : width(img.width),
+        height(img.height),
+        channels(img.channels),
+        data(img.data) {
     deleter = img.deleter;
     img.data = nullptr;
     img.deleter = nullptr;
   }
-
 
   bool IsValid() const { return data != nullptr; }
 
@@ -53,6 +56,10 @@ class CPUImage {
         data = nullptr;
       }
     };
+  }
+
+  void SaveToFile(const std::string& path) const {
+    stbi_write_png(path.c_str(), width, height, channels, data, 0);
   }
 
   ~CPUImage() {
