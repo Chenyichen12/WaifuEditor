@@ -25,6 +25,9 @@ void Gui::WindowResizeCallback(GLFWwindow *window, int width, int height) {
     driver->MarkSwapchainInvalid();
   }
 }
+void Gui::WindowPosCallback(GLFWwindow *window, int x, int y) {
+
+}
 
 Gui::Gui() {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);

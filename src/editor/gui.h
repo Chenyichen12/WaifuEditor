@@ -1,7 +1,6 @@
 #ifndef EDITOR_GUI_H_
 #define EDITOR_GUI_H_
 #include <string>
-#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <sigslot/signal.hpp>

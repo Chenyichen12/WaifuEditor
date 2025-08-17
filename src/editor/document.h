@@ -37,6 +37,19 @@ class EditorConfig : public NoCopyable {
  private:
   EditorConfig();
 
+  template <typename T>
+  static void SafeGetProperty(const nlohmann::json& json,
+                              const std::string& key, Property<T>& value,
+                              const std::optional<T> default_value = std::nullopt) {
+    if (json.contains(key)) {
+      value.Set(json[key].get<T>());
+    } else {
+      if (default_value.has_value()) {
+        value.Set(default_value.value());
+      }
+    }
+  }
+
  public:
   static EditorConfig* GetInstance() {
     static EditorConfig instance;
